@@ -1489,7 +1489,7 @@ label.btn { cursor: pointer; }
   function vpApply() {
     vpRaf = 0;
     if (!vv) return;
-    root.style.setProperty('--vvh', (vv.height - 44 * (root.classList.contains('typing') ? 1 : 0)) + 'px');
+    root.style.setProperty('--vvh', vv.height + 'px');
     root.style.setProperty('--vvt', vv.offsetTop + 'px');
   }
   function vpUpdate() { if (!vpRaf) vpRaf = requestAnimationFrame(vpApply); }
