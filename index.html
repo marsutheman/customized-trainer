@@ -408,6 +408,19 @@ input { -webkit-user-select: text; user-select: text; }
   appearance: none;
 }
 .ex-input:focus { outline: none; box-shadow: 0 0 0 3px var(--hairline); }
+html.typing .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; transition: none; }
+html.typing #ex-sheet.show {
+  top: calc(var(--vvt, 0px) + env(safe-area-inset-top, 0px) + 8px);
+  bottom: auto;
+  height: calc(var(--vvh, 100vh) - env(safe-area-inset-top, 0px) - 16px);
+  max-height: none;
+  transform: translate(-50%, 0);
+  border-radius: 26px;
+  padding-bottom: 12px;
+  transition: none;
+}
+html.typing #ex-sheet .ex-list { flex: 1 1 auto; max-height: none; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.sheet button, .sheet .ex-row { touch-action: manipulation; }
 .ex-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; max-height: calc(var(--vvh, 100vh) * 0.5); }
 .ex-row {
   width: 100%;
@@ -1467,21 +1480,29 @@ label.btn { cursor: pointer; }
   /* tapping outside a text field closes the number pad, which has no Done key */
   document.addEventListener('pointerdown', function (e) {
     var a = document.activeElement;
-    if (a && a.tagName === 'INPUT' && !e.target.closest('input')) a.blur();
+    if (a && a.tagName === 'INPUT' && !e.target.closest('input, .sheet')) a.blur();
   });
 
-  /* keep sheets above the on-screen keyboard */
-  var vv = window.visualViewport;
-  function vpUpdate() {
+  /* search sheet: while typing it is pinned to the top of the visible area, so the
+     keyboard never covers the results and nothing has to follow the keyboard */
+  var vv = window.visualViewport, root = document.documentElement, vpRaf = 0, typingOff = 0;
+  function vpApply() {
+    vpRaf = 0;
     if (!vv) return;
-    var a = document.activeElement, typing = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
-    var kb = typing ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
-    var st = document.documentElement.style;
-    st.setProperty('--kb', (kb > 120 ? kb : 0) + 'px');
-    st.setProperty('--vvh', vv.height + 'px');
+    root.style.setProperty('--vvh', (vv.height - 44 * (root.classList.contains('typing') ? 1 : 0)) + 'px');
+    root.style.setProperty('--vvt', vv.offsetTop + 'px');
   }
-  document.addEventListener('focusin', function () { setTimeout(vpUpdate, 50); setTimeout(vpUpdate, 400); });
-  document.addEventListener('focusout', function () { setTimeout(vpUpdate, 50); setTimeout(vpUpdate, 400); });
+  function vpUpdate() { if (!vpRaf) vpRaf = requestAnimationFrame(vpApply); }
+  root.style.setProperty('--kb', '0px');
+  exInput.addEventListener('focus', function () {
+    clearTimeout(typingOff);
+    root.classList.add('typing');
+    vpUpdate();
+  });
+  exInput.addEventListener('blur', function () {
+    clearTimeout(typingOff);
+    typingOff = setTimeout(function () { root.classList.remove('typing'); vpUpdate(); }, 120);
+  });
   if (vv) { vv.addEventListener('resize', vpUpdate); vv.addEventListener('scroll', vpUpdate); vpUpdate(); }
 
   /* widget picker */
