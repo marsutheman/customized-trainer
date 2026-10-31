@@ -14,7 +14,8 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
-:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); }
+html { background: #000; }
 body { margin: 0; font: 14px system-ui, -apple-system, 'Segoe UI', sans-serif; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
@@ -97,9 +98,10 @@ img { max-width: 100%; }
 }
 
 * { box-sizing: border-box; }
-html { height: 100%; }
+html { height: 100%; background: var(--bg); }
 body {
   min-height: 100%;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -107,6 +109,7 @@ body {
   font-family: var(--font-ui);
   font-size: 16px;
   padding-block: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   -webkit-tap-highlight-color: transparent;
@@ -507,7 +510,7 @@ input { -webkit-user-select: text; user-select: text; }
 svg:not(.chart) :is(path, circle, rect, line) { vector-effect: non-scaling-stroke; }
 svg:not(.chart):not(.plus) { stroke-width: var(--icon-w) !important; stroke-linecap: var(--icon-cap); stroke-linejoin: var(--icon-join); }
 .chk svg { stroke-width: calc(var(--icon-w) * 1.4) !important; }
-.sheet::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 80px; background: var(--surface); }
+.sheet::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 300px; background: var(--surface); }
 [data-anim="none"] *, [data-anim="none"] *::before, [data-anim="none"] *::after { animation: none !important; transition: none !important; }
 
 /* ---------- tiles, scrolling cards, resize handle ---------- */
@@ -1471,11 +1474,14 @@ label.btn { cursor: pointer; }
   var vv = window.visualViewport;
   function vpUpdate() {
     if (!vv) return;
-    var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    var a = document.activeElement, typing = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+    var kb = typing ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
     var st = document.documentElement.style;
-    st.setProperty('--kb', (kb > 80 ? kb : 0) + 'px');
+    st.setProperty('--kb', (kb > 120 ? kb : 0) + 'px');
     st.setProperty('--vvh', vv.height + 'px');
   }
+  document.addEventListener('focusin', function () { setTimeout(vpUpdate, 50); setTimeout(vpUpdate, 400); });
+  document.addEventListener('focusout', function () { setTimeout(vpUpdate, 50); setTimeout(vpUpdate, 400); });
   if (vv) { vv.addEventListener('resize', vpUpdate); vv.addEventListener('scroll', vpUpdate); vpUpdate(); }
 
   /* widget picker */
