@@ -109,7 +109,7 @@ body {
   font-family: var(--font-ui);
   font-size: 16px;
   padding-block: 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + var(--kbp, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   -webkit-tap-highlight-color: transparent;
@@ -415,7 +415,7 @@ html.typing #ex-sheet.show {
   height: calc(var(--vvh, 100vh) - env(safe-area-inset-top, 0px) - 16px);
   max-height: none;
   transform: translate(-50%, 0);
-  border-radius: 26px;
+  border-radius: 26px 26px 0 0;
   padding-bottom: 12px;
   transition: none;
 }
@@ -586,7 +586,7 @@ textarea { -webkit-user-select: text; user-select: text; }
   color: var(--ink);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-bottom: max(40px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(max(40px, env(safe-area-inset-bottom, 0px)) + var(--kbp, 0px));
   transform: translateX(100%);
   visibility: hidden;
   transition: transform var(--dur-l) var(--ease-sheet), visibility 0s var(--dur-l);
@@ -1491,9 +1491,22 @@ label.btn { cursor: pointer; }
     if (!vv) return;
     root.style.setProperty('--vvh', vv.height + 'px');
     root.style.setProperty('--vvt', vv.offsetTop + 'px');
+    var a = document.activeElement, field = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && !a.closest('.sheet');
+    var kbp = field ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    root.style.setProperty('--kbp', (kbp > 120 ? kbp : 0) + 'px');
   }
   function vpUpdate() { if (!vpRaf) vpRaf = requestAnimationFrame(vpApply); }
   root.style.setProperty('--kb', '0px');
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA') || t.closest('.sheet')) return;
+    setTimeout(vpUpdate, 60);
+    setTimeout(function () {
+      vpUpdate();
+      if (document.activeElement === t && t.scrollIntoView) { try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (er) {} }
+    }, 420);
+  });
+  document.addEventListener('focusout', function () { setTimeout(vpUpdate, 80); setTimeout(vpUpdate, 450); });
   exInput.addEventListener('focus', function () {
     clearTimeout(typingOff);
     root.classList.add('typing');
