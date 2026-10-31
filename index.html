@@ -1,0 +1,2971 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>customized-trainer</title>
+<meta name="description" content="A fully customizable workout tracker.">
+<meta name="theme-color" content="#0c0d0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="customized-trainer">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px system-ui, -apple-system, 'Segoe UI', sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone-width column. Widgets stack top to bottom, an empty plus slot always sits under the last one. Bottom sheets add widgets and exercises, a pop-up menu (long press) manages a widget. */
+:root {
+  --bg: #fbfbfc;
+  --surface: #ffffff;
+  --ink: #0e1013;
+  --muted: #666b73;
+  --line: #14161a;
+  --hairline: rgba(14, 16, 19, 0.12);
+  --field: #eff0f2;
+  --scrim: rgba(14, 16, 19, 0.28);
+  --run: #1f8a55;
+  --on-run: #ffffff;
+  --done-bg: rgba(31, 138, 85, 0.12);
+  --danger: #d3302a;
+  --shadow: rgba(14, 16, 19, 0.22);
+  --font-ui: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --border-w: 1.5px;
+  --hair-w: 1px;
+  --radius: 22px;
+  --r-md: 14px;
+  --r-sm: 10px;
+  --icon-w: 2px;
+  --icon-cap: round;
+  --icon-join: round;
+  --dur: 180ms;
+  --dur-l: 280ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-sheet: cubic-bezier(0.2, 0.85, 0.25, 1);
+  --ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  --lift: 1.03;
+  --press: 0.985;
+  --pop-from: 0.92;
+  --gap: 16px;
+  --slot-h: 124px;
+  --time-size: 64px;
+  --card-bg: var(--surface);
+  --card-blur: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0d0f;
+    --surface: #17191d;
+    --ink: #f1f2f4;
+    --muted: #9298a1;
+    --line: #e7e9ec;
+    --hairline: rgba(241, 242, 244, 0.14);
+    --field: #24272c;
+    --scrim: rgba(0, 0, 0, 0.5);
+    --run: #4fd18b;
+    --on-run: #07220f;
+    --done-bg: rgba(79, 209, 139, 0.16);
+    --danger: #ff6b60;
+    --shadow: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0d0f;
+  --surface: #17191d;
+  --ink: #f1f2f4;
+  --muted: #9298a1;
+  --line: #e7e9ec;
+  --hairline: rgba(241, 242, 244, 0.14);
+  --field: #24272c;
+  --scrim: rgba(0, 0, 0, 0.5);
+  --run: #4fd18b;
+  --on-run: #07220f;
+  --done-bg: rgba(79, 209, 139, 0.16);
+  --danger: #ff6b60;
+  --shadow: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { height: 100%; }
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button { font: inherit; color: inherit; }
+input { -webkit-user-select: text; user-select: text; }
+
+.screen {
+  flex: 1;
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.list { display: flex; flex-direction: column; gap: var(--gap); }
+.slot-wrap { position: relative; }
+
+/* ---------- single-slot widgets (timer, start workout, plus) ---------- */
+.slot {
+  position: relative;
+  width: 100%;
+  height: calc(var(--n, 1) * var(--slot-h) + (var(--n, 1) - 1) * var(--gap));
+  display: grid;
+  place-items: center;
+  background: var(--card-bg);
+  -webkit-backdrop-filter: var(--card-blur);
+  backdrop-filter: var(--card-blur);
+  color: var(--ink);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur), height var(--dur) var(--ease);
+  outline-offset: 3px;
+}
+.slot:active { transform: scale(var(--press)); }
+.slot:focus-visible { outline: 2px solid var(--ink); }
+.slot.lifted {
+  z-index: 30;
+  transform: scale(var(--lift));
+  box-shadow: 0 20px 44px var(--shadow);
+}
+.slot.start {
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.slot.start svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.slot .dot {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--run);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.slot .dot[hidden] { display: none; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+.lcd-host { max-width: 100%; padding: 0 16px; display: grid; place-items: center; }
+.plus { width: 46px; height: 46px; fill: none; stroke: currentColor; stroke-width: max(var(--border-w), 1px); stroke-linecap: var(--icon-cap); stroke-linejoin: var(--icon-join); }
+.addtxt { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+.time { font-family: inherit; font-size: calc(var(--time-size) * (1 + (var(--n, 1) - 1) * 0.3)); font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.time.mini { font-size: 26px; }
+
+/* ---------- workout card ---------- */
+.wk-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--card-bg);
+  -webkit-backdrop-filter: var(--card-blur);
+  backdrop-filter: var(--card-blur);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur), height var(--dur) var(--ease);
+}
+.wk-card.lifted { z-index: 30; transform: scale(calc(1 + (var(--lift) - 1) / 2)); box-shadow: 0 20px 44px var(--shadow); }
+.wk-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wk-head { flex: 1; min-width: 0; min-height: 38px; display: flex; align-items: center; gap: 10px; padding-left: 4px; }
+.wk-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.wk-more { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--hairline); cursor: pointer; }
+.wk-more svg { width: 22px; height: 22px; }
+
+.ex { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: var(--hair-w) solid var(--hairline); }
+.ex-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 4px; }
+.ex-head h3 { margin: 0; min-width: 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.ex-rm { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); cursor: pointer; }
+.ex-rm svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ex-rm.armed { background: var(--danger); color: #fff; }
+
+.sets { display: flex; flex-direction: column; gap: 4px; }
+.set-labels, .set { display: grid; grid-template-columns: 34px minmax(0, 1fr) 60px 64px 40px; gap: 6px; align-items: center; }
+.set-labels { padding: 0 4px 2px; color: var(--muted); font-size: 12px; text-align: center; }
+.set { padding: 4px; border-radius: var(--r-sm); }
+.set.done { background: var(--done-bg); }
+.set.shake { animation: shake 0.3s; }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.set-n { width: 34px; height: 40px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: none; font-size: 15px; font-weight: 600; cursor: pointer; }
+.set-n .x { display: none; }
+.set-n .x svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.set-n.armed { background: var(--danger); color: #fff; }
+.set-n.armed .n { display: none; }
+.set-n.armed .x { display: block; }
+.prev { overflow: hidden; color: var(--muted); font-size: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.f {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+  text-align: center;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.f::placeholder { color: var(--muted); opacity: 0.55; }
+.f:focus { outline: none; border-color: var(--ink); background: var(--surface); }
+.chk { width: 40px; height: 40px; display: grid; place-items: center; border: var(--border-w) solid var(--hairline); border-radius: var(--r-sm); background: var(--field); color: var(--muted); cursor: pointer; }
+.chk svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.45; }
+.set.done .chk { background: var(--run); border-color: var(--run); color: var(--on-run); }
+.set.done .chk svg { opacity: 1; }
+
+.btn {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: var(--border-w) solid var(--hairline);
+  border-radius: var(--r-md);
+  background: none;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.btn.line { border-color: var(--line); }
+.btn:active, .chk:active, .ex-row:active { opacity: 0.7; }
+.btn:focus-visible, .wk-more:focus-visible, .chk:focus-visible, .set-n:focus-visible, .ex-rm:focus-visible, .ex-row:focus-visible, .close:focus-visible, .pick:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.hint {
+  margin: auto 0 0;
+  padding-top: 8px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur);
+}
+.scrim.show { opacity: 1; pointer-events: auto; }
+
+/* ---------- pop-up menu ---------- */
+.menu {
+  position: absolute;
+  z-index: 31;
+  top: calc(100% + 14px);
+  left: 50%;
+  width: 236px;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  box-shadow: 0 16px 40px var(--shadow), 0 0 0 1px var(--hairline);
+  overflow: hidden;
+  transform: translateX(-50%) scale(var(--pop-from));
+  transform-origin: 50% 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: transform var(--dur) var(--ease-pop), opacity var(--dur), visibility 0s var(--dur);
+}
+.menu.up { top: auto; bottom: calc(100% + 14px); transform-origin: 50% 100%; }
+.menu.show {
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+  visibility: visible;
+  transition: transform var(--dur) var(--ease-pop), opacity var(--dur), visibility 0s;
+}
+.wk-top .menu { top: calc(100% + 8px); left: auto; right: 0; transform: scale(var(--pop-from)); transform-origin: 100% 0; }
+.wk-top .menu.up { top: auto; bottom: calc(100% + 8px); transform-origin: 100% 100%; }
+.wk-top .menu.show { transform: scale(1); }
+.menu button {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  background: none;
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu button + button { border-top: var(--hair-w) solid var(--hairline); }
+.menu button:active { background: var(--hairline); }
+.menu button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.menu button.danger { color: var(--danger); }
+.menu button .alt { display: none; }
+.menu button.armed .lbl { display: none; }
+.menu button.armed .alt { display: inline; font-weight: 600; }
+.menu svg { flex: none; width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- bottom sheets ---------- */
+.sheet {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: var(--kb, 0px);
+  width: 100%;
+  max-width: 430px;
+  max-height: calc(var(--vvh, 100vh) - 16px);
+  display: flex;
+  flex-direction: column;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--surface);
+  border-radius: 26px 26px 0 0;
+  box-shadow: 0 -10px 40px var(--shadow), 0 0 0 1px var(--hairline);
+  transform: translate(-50%, 100%);
+  visibility: hidden;
+  transition: transform var(--dur-l) var(--ease-sheet), visibility 0s var(--dur-l);
+}
+.sheet.show {
+  transform: translate(-50%, 0);
+  visibility: visible;
+  transition: transform var(--dur-l) var(--ease-sheet), visibility 0s;
+}
+.grab { flex: none; width: 38px; height: 5px; margin: 0 auto 12px; border-radius: 3px; background: var(--hairline); }
+.sheet-head { flex: none; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sheet-head h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.close { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--hairline); cursor: pointer; }
+.close svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+
+.pick-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; }
+.pick {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: var(--hair-w) solid var(--hairline);
+  border-radius: var(--r-md);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.pick:active { background: var(--hairline); }
+.pick .thumb { height: 66px; display: grid; place-items: center; padding: 0 10px; border: var(--border-w) solid var(--line); border-radius: var(--r-md); }
+.pick .thumb svg.ic { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pick b { display: block; font-size: 17px; font-weight: 600; }
+.pick span { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; line-height: 1.35; }
+
+.ex-form { flex: none; margin: 0 0 10px; }
+.ex-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ex-input:focus { outline: none; box-shadow: 0 0 0 3px var(--hairline); }
+.ex-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; max-height: calc(var(--vvh, 100vh) * 0.5); }
+.ex-row {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: var(--hair-w) solid var(--hairline);
+  border-radius: var(--r-md);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.ex-row b { min-width: 0; font-size: 17px; font-weight: 500; overflow-wrap: anywhere; }
+.ex-row span { flex: none; color: var(--muted); font-size: 13px; }
+.ex-row.create { border-color: var(--line); }
+.ex-row.create b { font-weight: 600; }
+.ex-row svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ex-empty { margin: 2px 2px 8px; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+.head-actions { display: flex; align-items: center; gap: 6px; }
+.txtbtn { padding: 7px 12px; border: 0; border-radius: var(--r-sm); background: none; font-size: 16px; font-weight: 500; cursor: pointer; }
+.txtbtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ex-row.edit { padding: 6px 6px 6px 8px; cursor: default; }
+.ex-row.edit:active { opacity: 1; }
+.ex-name {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ex-name:focus { outline: none; border-color: var(--ink); background: var(--surface); }
+.ex-row.edit .ex-rm { width: 42px; height: 42px; }
+
+/* ---------- history widget ---------- */
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; border-radius: var(--r-sm); background: var(--field); }
+.tab { min-height: 36px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font-size: 15px; font-weight: 500; cursor: pointer; }
+.tab.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px var(--shadow); }
+.tab:focus-visible, .hhead:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.hlist { display: flex; flex-direction: column; }
+.hrow { border-top: var(--hair-w) solid var(--hairline); }
+.hrow:first-child { border-top: 0; }
+.hhead { width: 100%; min-height: 58px; display: flex; align-items: center; gap: 12px; padding: 8px 4px; border: 0; background: none; text-align: left; cursor: pointer; }
+.hmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hmain b { font-size: 16.5px; font-weight: 600; overflow-wrap: anywhere; }
+.hmain span { color: var(--muted); font-size: 13.5px; }
+.hdur { flex: none; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.chev { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--dur); }
+.hrow.open .chev { transform: rotate(180deg); }
+.hbody { display: flex; flex-direction: column; gap: 12px; padding: 2px 4px 14px; }
+.hex h4 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 4px 9px; border-radius: 8px; background: var(--field); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.hs-empty { margin: 4px 4px 6px; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+.cap { color: var(--muted); font-size: 13px; }
+.readout { margin: 2px 0 4px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.readout b { color: var(--ink); font-weight: 600; }
+.chart { display: block; width: 100%; height: auto; touch-action: manipulation; }
+.cg { stroke: var(--hairline); stroke-width: 1; }
+.cl { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ca { fill: var(--ink); opacity: 0.1; }
+.cd { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.ct { fill: var(--muted); font-family: var(--font-ui); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.hit { fill: transparent; cursor: pointer; }
+.btn.danger-btn { color: var(--danger); }
+.btn.armed { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn .alt { display: none; }
+.btn.armed .lbl { display: none; }
+.btn.armed .alt { display: inline; }
+
+.toast {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  padding: 10px 16px;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 15px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  transition: opacity var(--dur), transform var(--dur);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+
+/* ---------- look settings: global icon + background rules ---------- */
+#bgfx { position: fixed; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg); }
+svg:not(.chart) :is(path, circle, rect, line) { vector-effect: non-scaling-stroke; }
+svg:not(.chart):not(.plus) { stroke-width: var(--icon-w) !important; stroke-linecap: var(--icon-cap); stroke-linejoin: var(--icon-join); }
+.chk svg { stroke-width: calc(var(--icon-w) * 1.4) !important; }
+.sheet::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 80px; background: var(--surface); }
+[data-anim="none"] *, [data-anim="none"] *::before, [data-anim="none"] *::after { animation: none !important; transition: none !important; }
+
+/* ---------- tiles, scrolling cards, resize handle ---------- */
+.wk-card.fixed { height: calc(var(--n, 1) * var(--slot-h) + (var(--n, 1) - 1) * var(--gap)); }
+.wk-top { flex: none; }
+.wk-scroll { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.wlabel { position: absolute; top: 10px; left: 14px; max-width: 60%; overflow: hidden; color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.slot-wrap.resizing { z-index: 30; }
+.slot-wrap.resizing > .slot, .slot-wrap.resizing > .wk-card { box-shadow: 0 20px 44px var(--shadow); }
+.rz { position: absolute; z-index: 32; left: 50%; bottom: -16px; width: 76px; height: 32px; margin-left: -38px; display: grid; place-items: center; border-radius: 999px; background: var(--ink); color: var(--bg); cursor: ns-resize; touch-action: none; box-shadow: 0 6px 16px var(--shadow); }
+.rz::before { content: ""; width: 28px; height: 4px; border-radius: 2px; background: currentColor; opacity: 0.7; }
+.rz::after { content: ""; position: absolute; inset: -14px -20px; }
+.rz-done { position: absolute; z-index: 32; right: 8px; bottom: -16px; height: 32px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 16px var(--shadow); }
+.rz-done:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+#wsettings { z-index: 61; }
+.lib-add { display: flex; gap: 8px; align-items: stretch; }
+.lib-add .ex-input { flex: 1; min-width: 0; }
+.lib-add .btn { flex: none; width: 48px; min-height: 48px; padding: 0; }
+.lib-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- layout edit mode ---------- */
+@keyframes jig { 0% { transform: rotate(-0.5deg); } 100% { transform: rotate(0.5deg); } }
+.editing .slot-wrap[data-id] > .slot, .editing .slot-wrap[data-id] > .wk-card { pointer-events: none; }
+.slot-wrap.jig { touch-action: pan-y; }
+.slot-wrap.jig > .slot, .slot-wrap.jig > .wk-card { animation: jig 0.26s ease-in-out infinite alternate; animation-delay: var(--jd, 0s); }
+.slot-wrap.dragging { z-index: 40; touch-action: none; }
+.slot-wrap.dragging > .slot, .slot-wrap.dragging > .wk-card { animation: none; transform: scale(1.02); box-shadow: 0 20px 44px var(--shadow); }
+.editing .top { visibility: hidden; }
+.ed-x { position: absolute; z-index: 33; top: -9px; left: -9px; min-width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 6px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px var(--shadow); }
+.ed-x::after { content: ""; position: absolute; inset: -8px; }
+.ed-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; }
+.ed-x .xt { display: none; }
+.ed-x.armed { padding: 0 12px; background: var(--danger); color: #fff; }
+.ed-x.armed .xi { display: none; }
+.ed-x.armed .xt { display: inline; }
+.ed-x:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+textarea { -webkit-user-select: text; user-select: text; }
+.bk-text { width: 100%; min-height: 84px; padding: 10px 14px; border: var(--border-w) solid var(--line); border-radius: var(--r-md); background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; resize: vertical; -webkit-appearance: none; appearance: none; }
+.bk-text:focus { outline: none; box-shadow: 0 0 0 3px var(--hairline); }
+.bk-sum { margin: 0; font-size: 15.5px; line-height: 1.45; }
+.rz-top { position: fixed; z-index: 35; top: calc(env(safe-area-inset-top, 0px) + 10px); right: max(16px, env(safe-area-inset-right, 0px)); height: 38px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 16px var(--shadow); }
+.rz-top:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ---------- top bar ---------- */
+.top { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 40px; }
+.hbtn { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.hbtn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; }
+.hbtn:active { background: var(--hairline); }
+.hbtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ---------- settings page ---------- */
+.page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  color: var(--ink);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: max(40px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform var(--dur-l) var(--ease-sheet), visibility 0s var(--dur-l);
+}
+.page.show { transform: none; visibility: visible; transition: transform var(--dur-l) var(--ease-sheet), visibility 0s; }
+.page-in { width: 100%; max-width: 430px; margin: 0 auto; }
+.st-top { position: sticky; top: 0; z-index: 3; display: block; padding: calc(env(safe-area-inset-top, 0px) + 12px) 0 0; background: var(--bg); }
+.st-row { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; }
+.st-nav { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 2px 16px 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.st-nav::-webkit-scrollbar { display: none; }
+.st-nav:empty { display: none; }
+.chip { flex: none; min-height: 34px; padding: 0 14px; border: var(--hair-w) solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.st-cat { scroll-margin-top: 108px; margin-top: 36px; }
+.st-cat:first-child { margin-top: 12px; }
+.st-cat-h { display: flex; align-items: center; gap: 12px; margin: 0 0 4px; color: var(--muted); font-size: 12.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; }
+.st-cat-h::after { content: ''; flex: 1; height: var(--hair-w); background: var(--line); }
+.st-cat .st-sect { margin-top: 18px; }
+.st-cat .st-sect + .st-sect { margin-top: 28px; padding-top: 24px; border-top: var(--hair-w) dashed var(--line); }
+.st-top h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.015em; }
+.st-sect { margin-top: 26px; display: flex; flex-direction: column; gap: 12px; }
+.st-sect h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.st-sect h3 { margin: 4px 0 0; font-size: 15px; font-weight: 600; }
+.st-sub { margin: -4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.st-card { display: flex; flex-direction: column; gap: 14px; padding: 14px; background: var(--surface); border: var(--border-w) solid var(--line); border-radius: var(--radius); }
+.cap-s { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.pv { display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.pv-box { padding: 12px; background: var(--bg); border: var(--hair-w) solid var(--hairline); border-radius: var(--r-md); }
+.pv .f { display: grid; place-items: center; }
+.pv .wk-more { display: grid; }
+
+.fgrid { display: flex; flex-direction: column; gap: 8px; }
+.fopt { min-height: 52px; padding: 6px 14px; border: 0; border-radius: var(--r-md); background: var(--field); color: var(--ink); font-size: 19px; line-height: 1.2; text-align: center; cursor: pointer; }
+.fopt.on { background: var(--ink); color: var(--bg); }
+.fopt:focus-visible, .theme:focus-visible, .iopt:focus-visible, .opt:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cf { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.cf form { display: flex; flex-direction: column; gap: 8px; }
+label.btn { cursor: pointer; }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+
+.sg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: var(--r-md); background: var(--field); }
+
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.theme { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: var(--hair-w) solid var(--hairline); border-radius: var(--r-md); background: none; color: var(--ink); font-size: 14px; text-align: center; cursor: pointer; }
+.theme.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.tsw { position: relative; display: flex; height: 42px; overflow: hidden; border: 1px solid var(--hairline); border-radius: 9px; }
+.tsw > span { flex: 1; }
+.tsw > i { position: absolute; left: 6px; right: 6px; top: 7px; bottom: 7px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 5px; border: 1.5px solid; border-radius: 5px; }
+.tsw > i b { display: block; width: 55%; height: 3px; border-radius: 2px; }
+.tsw > i em { display: block; width: 8px; height: 8px; border-radius: 50%; position: absolute; right: 5px; top: 50%; margin-top: -4px; }
+
+.crow { display: grid; grid-template-columns: minmax(0, 1fr) 44px 96px; gap: 8px; align-items: center; font-size: 15.5px; }
+.csw { width: 44px; height: 36px; padding: 0; border: var(--hair-w) solid var(--hairline); border-radius: var(--r-sm); background: none; cursor: pointer; }
+.csw::-webkit-color-swatch-wrapper { padding: 0; }
+.csw::-webkit-color-swatch { border: 0; border-radius: calc(var(--r-sm) - 1px); }
+.csw::-moz-color-swatch { border: 0; border-radius: calc(var(--r-sm) - 1px); }
+.chex { width: 100%; min-width: 0; height: 36px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-sm); background: var(--field); color: var(--ink); font: inherit; font-size: 15px; text-align: center; -webkit-appearance: none; appearance: none; }
+.chex:focus { outline: none; border-color: var(--ink); }
+
+.sl { display: flex; flex-direction: column; gap: 4px; }
+.sl-top { display: flex; justify-content: space-between; gap: 12px; font-size: 15.5px; }
+.sl-top output { color: var(--muted); font-variant-numeric: tabular-nums; }
+.sl input[type="range"] { width: 100%; height: 30px; margin: 0; accent-color: var(--ink); }
+
+.irow { display: flex; flex-direction: column; gap: 8px; }
+.irow > span { font-size: 15.5px; }
+.iopts { display: flex; flex-wrap: wrap; gap: 8px; }
+.iopt { width: 56px; height: 56px; display: grid; place-items: center; border: var(--hair-w) solid var(--hairline); border-radius: var(--r-md); background: none; color: var(--ink); cursor: pointer; }
+.iopt svg { width: 26px; height: 26px; fill: none; stroke: currentColor; }
+.iopt.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.pv-icons { display: flex; align-items: center; justify-content: space-around; padding: 12px; color: var(--ink); background: var(--bg); border: var(--hair-w) solid var(--hairline); border-radius: var(--r-md); }
+.pv-icons svg { width: 26px; height: 26px; fill: none; stroke: currentColor; }
+
+.bgprev { position: relative; height: 150px; display: grid; place-items: center; overflow: hidden; border: var(--hair-w) solid var(--hairline); border-radius: var(--r-md); background-color: var(--bg); background-size: cover; background-position: center; }
+.bgprev .slot { width: 62%; height: 74px; pointer-events: none; }
+.bgprev .time { font-size: 34px; }
+
+.opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.opt { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px; border: var(--hair-w) solid var(--hairline); border-radius: var(--r-md); background: none; color: var(--ink); font-size: 14px; text-align: center; cursor: pointer; }
+.opt.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.opt small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.mk { position: relative; height: 70px; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; padding: 8px 8px 6px; border: var(--hair-w) solid var(--hairline); border-radius: 9px; background: var(--bg); }
+.mk i { display: block; height: 14px; border: 1.5px solid var(--line); border-radius: 4px; background: var(--surface); }
+.mk i.pl { display: grid; place-items: center; height: 14px; font-size: 11px; font-style: normal; line-height: 1; }
+.mk b { position: absolute; top: 5px; right: 6px; width: 14px; height: 14px; display: grid; place-items: center; border: 1.5px solid var(--line); border-radius: 50%; font-size: 11px; line-height: 1; }
+.opts.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.demo-wrap { position: relative; transition: padding var(--dur) var(--ease); }
+.demo-wrap.open { padding-bottom: 124px; }
+.demo-wrap .menu { top: calc(92px + 14px); }
+.fnote { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.sw-hint { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.demo { height: 92px; font-size: 17px; font-weight: 500; color: var(--muted); touch-action: manipulation; }
+
+@media (max-width: 380px) {
+  .opts { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div id="bgfx" hidden></div>
+
+<main class="screen">
+  <header class="top">
+    <button type="button" id="hdr-add" class="hbtn" aria-label="Add widget" hidden></button>
+    <button type="button" id="hdr-gear" class="hbtn" aria-label="Settings"></button>
+  </header>
+  <div id="list" class="list"></div>
+  <p id="hint" class="hint"></p>
+</main>
+
+<div id="scrim" class="scrim"></div>
+
+<section id="sheet" class="sheet" role="dialog" aria-label="Add widget">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <h2>Add widget</h2>
+    <button type="button" class="close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
+  </div>
+  <div class="pick-list">
+    <button type="button" class="pick" data-type="timer">
+      <div class="thumb" id="pick-thumb"></div>
+      <div><b>Timer</b><span>Tap to start and stop.</span></div>
+    </button>
+    <button type="button" class="pick" data-type="workout">
+      <div class="thumb"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg></div>
+      <div><b>Workout</b><span>Exercises, sets, reps and weights.</span></div>
+    </button>
+    <button type="button" class="pick" data-type="history">
+      <div class="thumb"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18l5.5-6 4 3.5L20 6"/></svg></div>
+      <div><b>History</b><span>Past workouts and progress per exercise.</span></div>
+    </button>
+    <button type="button" class="pick" data-type="library">
+      <div class="thumb"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></div>
+      <div><b>Exercise library</b><span>All the exercises you have created. Rename or delete them.</span></div>
+    </button>
+  </div>
+</section>
+
+<section id="ex-sheet" class="sheet" role="dialog" aria-label="Add exercise">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <h2>Add exercise</h2>
+    <div class="head-actions">
+      <button type="button" id="ex-edit" class="txtbtn" hidden>Edit</button>
+      <button type="button" class="close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
+    </div>
+  </div>
+  <form id="ex-form" class="ex-form" autocomplete="off">
+    <input id="ex-input" class="ex-input" type="text" maxlength="40" placeholder="Search or create exercise" autocapitalize="words" autocorrect="off" enterkeyhint="done" aria-label="Exercise name">
+  </form>
+  <div id="ex-list" class="ex-list"></div>
+</section>
+
+<section id="settings" class="page" role="dialog" aria-label="Settings" aria-hidden="true">
+  <div class="page-in">
+    <div class="st-top"><div class="st-row"><h1>Settings</h1><button type="button" class="txtbtn" data-act="s-close">Done</button></div><nav class="st-nav" id="st-nav" aria-label="Categories"></nav></div>
+    <div id="st-body"></div>
+  </div>
+</section>
+
+<section id="wsettings" class="page" role="dialog" aria-label="Widget settings" aria-hidden="true">
+  <div class="page-in">
+    <div class="st-top"><h1>Widget settings</h1><button type="button" class="txtbtn" data-act="ws-close">Done</button></div>
+    <div id="ws-body"></div>
+  </div>
+</section>
+
+<button type="button" id="rz-top" class="rz-top" hidden>Done</button>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var KEY = 'blankslate.v1';
+  var state = { widgets: [], exercises: [], history: {}, log: [] };
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function cid(x) { var s = String(x == null ? '' : x).replace(/[^a-z0-9]/gi, ''); return s || uid(); }
+  function newTimer() { return { id: uid(), type: 'timer', running: false, startedAt: 0, base: 0, tiles: 0, title: '', look: {} }; }
+  function newWorkout() { return { id: uid(), type: 'workout', active: false, startedAt: 0, items: [], tiles: 0, title: '', look: {} }; }
+  function newLibrary() { return { id: uid(), type: 'library', tiles: 0, title: '', look: {} }; }
+  function newHistory() { return { id: uid(), type: 'history', tab: 'workouts', tiles: 0, title: '', look: {} }; }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- appearance settings: data and helpers ---------- */
+  var FKEY = 'blankslate.fonts', BKEY = 'blankslate.bgimg';
+  var DEFAULTS = {
+    font: 'outfit', theme: 'auto', colors: {},
+    borderW: 1.5, hairW: 1, radius: 22, gap: 16, slotH: 124, timeSize: 64, cardOp: 100,
+    iconW: 2, iconCap: 'round', addIcon: 'plus',
+    bgType: 'color', bgC1: '', bgC2: '', bgAngle: 160, bgDim: 0,
+    anim: 'smooth', addBtn: 'slot', lang: 'en',
+    maxTimer: 2, maxWorkout: 4, maxHistory: 4, maxLibrary: 4
+  };
+  var SL = {
+    borderW: { min: 0, max: 6, step: 0.5, u: 'px' },
+    hairW: { min: 0, max: 3, step: 0.5, u: 'px' },
+    radius: { min: 0, max: 40, step: 1, u: 'px' },
+    gap: { min: 4, max: 32, step: 2, u: 'px' },
+    slotH: { min: 80, max: 200, step: 4, u: 'px' },
+    timeSize: { min: 32, max: 96, step: 2, u: 'px' },
+    cardOp: { min: 30, max: 100, step: 5, u: '%' },
+    iconW: { min: 0.5, max: 4, step: 0.25, u: 'px' },
+    bgAngle: { min: 0, max: 360, step: 5, u: '°' },
+    bgDim: { min: 0, max: 80, step: 5, u: '%' },
+    maxTimer: { min: 1, max: 8, step: 1, u: ' tiles' },
+    maxWorkout: { min: 1, max: 8, step: 1, u: ' tiles' },
+    maxHistory: { min: 1, max: 8, step: 1, u: ' tiles' },
+    maxLibrary: { min: 1, max: 8, step: 1, u: ' tiles' }
+  };
+  var PRESETS = {
+    light: { name: 'Light', bg: '#fbfbfc', surface: '#ffffff', ink: '#0e1013', muted: '#666b73', line: '#14161a', run: '#1f8a55', danger: '#d3302a' },
+    dark: { name: 'Dark', bg: '#0c0d0f', surface: '#17191d', ink: '#f1f2f4', muted: '#9298a1', line: '#e7e9ec', run: '#4fd18b', danger: '#ff6b60' },
+    black: { name: 'Black', bg: '#000000', surface: '#0e0e0e', ink: '#ffffff', muted: '#8b8b8b', line: '#d9d9d9', run: '#4fd18b', danger: '#ff6b60' },
+    slate: { name: 'Slate', bg: '#0f1722', surface: '#172230', ink: '#e8eef6', muted: '#8ea0b5', line: '#7f9cc4', run: '#5ee0c0', danger: '#ff7a7a' },
+    gray: { name: 'Gray', bg: '#e9ebee', surface: '#f6f7f8', ink: '#1b1d21', muted: '#5d636b', line: '#1b1d21', run: '#2f7d57', danger: '#c43d37' }
+  };
+  var PRESET_ORDER = ['auto', 'light', 'dark', 'black', 'slate', 'gray'];
+  var CTOK = [['bg', 'Background'], ['surface', 'Widget background'], ['ink', 'Text'], ['muted', 'Secondary text'], ['line', 'Borders'], ['run', 'Accent'], ['danger', 'Delete']];
+  var ANIMS = {
+    none: { name: 'None', desc: 'No motion at all', dur: '0ms', durL: '0ms', ease: 'linear', sheet: 'linear', pop: 'linear', lift: 1, press: 1, from: 1 },
+    smooth: { name: 'Smooth', desc: 'Calm and soft', dur: '220ms', durL: '340ms', ease: 'cubic-bezier(0.4, 0, 0.2, 1)', sheet: 'cubic-bezier(0.2, 0.85, 0.25, 1)', pop: 'cubic-bezier(0.2, 0.9, 0.3, 1)', lift: 1.03, press: 0.985, from: 0.94 },
+    snappy: { name: 'Snappy', desc: 'Quick and crisp', dur: '110ms', durL: '170ms', ease: 'cubic-bezier(0.2, 0.8, 0.2, 1)', sheet: 'cubic-bezier(0.2, 0.9, 0.2, 1)', pop: 'cubic-bezier(0.2, 0.9, 0.2, 1)', lift: 1.02, press: 0.97, from: 0.97 },
+    bouncy: { name: 'Bouncy', desc: 'Springy overshoot', dur: '420ms', durL: '560ms', ease: 'cubic-bezier(0.34, 1.56, 0.64, 1)', sheet: 'cubic-bezier(0.3, 1.35, 0.5, 1)', pop: 'cubic-bezier(0.34, 1.7, 0.64, 1)', lift: 1.08, press: 0.94, from: 0.6 }
+  };
+  var FONTS = [
+    { id: 'comfortaa', label: 'Comfortaa', g: 'Comfortaa:wght@400..700', stack: "'Comfortaa', system-ui, sans-serif" },
+    { id: 'comingsoon', label: 'Coming Soon', g: 'Coming+Soon', stack: "'Coming Soon', cursive" },
+    { id: 'courier', label: 'Courier', stack: "'Courier New', Courier, monospace" },
+    { id: 'geist', label: 'Geist', g: 'Geist:wght@400..700', stack: "'Geist', system-ui, sans-serif" },
+    { id: 'georgia', label: 'Georgia', stack: "Georgia, 'Times New Roman', serif" },
+    { id: 'ibmplexmono', label: 'IBM Plex Mono', g: 'IBM+Plex+Mono:wght@400;500;600', stack: "'IBM Plex Mono', ui-monospace, monospace" },
+    { id: 'inconsolata', label: 'Inconsolata', g: 'Inconsolata:wght@400..700', stack: "'Inconsolata', ui-monospace, monospace" },
+    { id: 'jetbrainsmono', label: 'JetBrains Mono', g: 'JetBrains+Mono:wght@400..700', stack: "'JetBrains Mono', ui-monospace, monospace" },
+    { id: 'lalezar', label: 'Lalezar', g: 'Lalezar', stack: "'Lalezar', system-ui, sans-serif" },
+    { id: 'outfit', label: 'Outfit', stack: "'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+    { id: 'system', label: 'System', stack: "system-ui, -apple-system, 'Segoe UI', sans-serif" }
+  ];
+
+  function clampNum(v, min, max, d) {
+    v = parseFloat(v);
+    if (!isFinite(v)) return d;
+    return Math.min(max, Math.max(min, v));
+  }
+  function normHex(v) {
+    v = String(v == null ? '' : v).trim().replace(/^#/, '').toLowerCase();
+    if (/^[0-9a-f]{3}$/.test(v)) v = v.charAt(0) + v.charAt(0) + v.charAt(1) + v.charAt(1) + v.charAt(2) + v.charAt(2);
+    return /^[0-9a-f]{6}$/.test(v) ? '#' + v : '';
+  }
+  function hexRgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+  function rgbHex(r) {
+    return '#' + r.map(function (x) { x = Math.max(0, Math.min(255, Math.round(x))); return (x < 16 ? '0' : '') + x.toString(16); }).join('');
+  }
+  function mixHex(a, b, t) {
+    var A = hexRgb(a), B = hexRgb(b);
+    return rgbHex([0, 1, 2].map(function (i) { return A[i] + (B[i] - A[i]) * t; }));
+  }
+  function rgbaOf(h, a) { var r = hexRgb(h); return 'rgba(' + r[0] + ',' + r[1] + ',' + r[2] + ',' + a + ')'; }
+  function lumOf(h) {
+    var r = hexRgb(h).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2];
+  }
+
+  function cleanSettings(s) {
+    s = s && typeof s === 'object' ? s : {};
+    var o = {}, k;
+    for (k in DEFAULTS) o[k] = DEFAULTS[k];
+    o.colors = {};
+    if (s.colors && typeof s.colors === 'object') {
+      CTOK.forEach(function (t) { var h = normHex(s.colors[t[0]]); if (h) o.colors[t[0]] = h; });
+    }
+    Object.keys(SL).forEach(function (key) { o[key] = clampNum(s[key], SL[key].min, SL[key].max, DEFAULTS[key]); });
+    o.font = typeof s.font === 'string' && s.font ? s.font.replace(/[^a-z0-9]/gi, '') || 'outfit' : 'outfit';
+    o.theme = PRESET_ORDER.indexOf(s.theme) > -1 ? s.theme : 'auto';
+    o.lang = ['en', 'fi', 'sv', 'fr'].indexOf(s.lang) > -1 ? s.lang : 'en';
+    o.iconCap = s.iconCap === 'square' ? 'square' : 'round';
+    o.addIcon = ['plus', 'circle', 'square', 'text'].indexOf(s.addIcon) > -1 ? s.addIcon : 'plus';
+    o.bgType = ['color', 'gradient', 'image'].indexOf(s.bgType) > -1 ? s.bgType : 'color';
+    o.bgC1 = normHex(s.bgC1);
+    o.bgC2 = normHex(s.bgC2);
+    o.anim = ANIMS[s.anim] ? s.anim : 'smooth';
+    o.addBtn = ['slot', 'corner', 'hidden'].indexOf(s.addBtn) > -1 ? s.addBtn : 'slot';
+    return o;
+  }
+
+  var customFonts = [];
+  try {
+    var cfl = JSON.parse(localStorage.getItem(FKEY));
+    if (Array.isArray(cfl)) {
+      cfl.forEach(function (f) {
+        if (f && typeof f.label === 'string' && /^[A-Za-z0-9 _-]{1,40}$/.test(f.label)) {
+          var isFile = f.kind === 'file' && typeof f.data === 'string' && f.data.indexOf('data:') === 0;
+          customFonts.push({ id: cid(f.id), label: f.label, kind: isFile ? 'file' : 'google', data: isFile ? f.data : '' });
+        }
+      });
+    }
+  } catch (e) {}
+  var bgImage = '';
+  try {
+    bgImage = localStorage.getItem(BKEY) || '';
+    if (bgImage.indexOf('data:image/') !== 0) bgImage = '';
+  } catch (e) {}
+
+  function withCommon(n, w) {
+    n.tiles = Math.round(clampNum(w.tiles, 1, 8, 0)) || 0;
+    n.title = typeof w.title === 'string' ? w.title.slice(0, 24) : '';
+    n.look = {};
+    var lk = w.look && typeof w.look === 'object' ? w.look : {};
+    if (isFinite(parseFloat(lk.borderW))) n.look.borderW = clampNum(lk.borderW, 0, 6, 1.5);
+    if (isFinite(parseFloat(lk.radius))) n.look.radius = clampNum(lk.radius, 0, 40, 22);
+    if (isFinite(parseFloat(lk.cardOp))) n.look.cardOp = clampNum(lk.cardOp, 30, 100, 100);
+    if (normHex(lk.line)) n.look.line = normHex(lk.line);
+    if (normHex(lk.surface)) n.look.surface = normHex(lk.surface);
+    return n;
+  }
+
+  /* ---------- load ---------- */
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY));
+    if (saved && Array.isArray(saved.widgets)) {
+      saved.widgets.forEach(function (w) {
+        if (!w) return;
+        if (w.type === 'timer') {
+          state.widgets.push(withCommon({ id: cid(w.id), type: 'timer', running: !!w.running, startedAt: Number(w.startedAt) || 0, base: Number(w.base) || 0 }, w));
+        } else if (w.type === 'workout') {
+          var nw = { id: cid(w.id), type: 'workout', active: !!w.active, startedAt: Number(w.startedAt) || 0, items: [] };
+          (Array.isArray(w.items) ? w.items : []).forEach(function (it) {
+            if (!it || typeof it.ex !== 'string') return;
+            var sets = [];
+            (Array.isArray(it.sets) ? it.sets : []).forEach(function (s) {
+              sets.push({ reps: String((s && s.reps) || '').slice(0, 4), kg: String((s && s.kg) || '').slice(0, 6), done: !!(s && s.done) });
+            });
+            nw.items.push({ ex: cid(it.ex), sets: sets });
+          });
+          if (!nw.active) { nw.items = []; }
+          state.widgets.push(withCommon(nw, w));
+        } else if (w.type === 'history') {
+          state.widgets.push(withCommon({ id: cid(w.id), type: 'history', tab: w.tab === 'exercises' ? 'exercises' : 'workouts' }, w));
+        } else if (w.type === 'library') {
+          state.widgets.push(withCommon({ id: cid(w.id), type: 'library' }, w));
+        }
+      });
+    } else if (saved && saved.widget === 'timer') {
+      var t = saved.timer || {};
+      var w0 = newTimer();
+      w0.running = !!t.running; w0.startedAt = Number(t.startedAt) || 0; w0.base = Number(t.base) || 0;
+      state.widgets.push(w0);
+    }
+    if (saved && Array.isArray(saved.exercises)) {
+      saved.exercises.forEach(function (x) {
+        if (x && typeof x.name === 'string' && x.name.trim()) state.exercises.push({ id: cid(x.id), name: x.name.trim().slice(0, 40) });
+      });
+    }
+    if (saved && saved.history && typeof saved.history === 'object') {
+      Object.keys(saved.history).forEach(function (k) {
+        var arr = saved.history[k];
+        if (!Array.isArray(arr)) return;
+        var out = [];
+        arr.forEach(function (h) {
+          if (!h || !Array.isArray(h.sets)) return;
+          out.push({ t: Number(h.t) || 0, sets: h.sets.map(function (s) { return { reps: String((s && s.reps) || ''), kg: String((s && s.kg) || '') }; }) });
+        });
+        state.history[cid(k)] = out.slice(0, 50);
+      });
+    }
+    if (saved && Array.isArray(saved.log)) {
+      saved.log.forEach(function (e) {
+        if (!e || !Array.isArray(e.items)) return;
+        var items = [];
+        e.items.forEach(function (it) {
+          if (!it || !Array.isArray(it.sets)) return;
+          items.push({
+            ex: cid(it.ex),
+            name: String(it.name || '').slice(0, 40),
+            sets: it.sets.map(function (s) { return { reps: String((s && s.reps) || ''), kg: String((s && s.kg) || '') }; })
+          });
+        });
+        if (items.length) state.log.push({ id: cid(e.id), t: Number(e.t) || 0, dur: Number(e.dur) || 0, items: items });
+      });
+      state.log = state.log.slice(0, 100);
+    }
+  } catch (e) {}
+  state.settings = cleanSettings(typeof saved !== 'undefined' && saved ? saved.settings : null);
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function find(id) {
+    for (var i = 0; i < state.widgets.length; i++) if (state.widgets[i].id === id) return state.widgets[i];
+    return null;
+  }
+  function exName(id) {
+    for (var i = 0; i < state.exercises.length; i++) if (state.exercises[i].id === id) return state.exercises[i].name;
+    return 'Exercise';
+  }
+  function lastSession(exId) {
+    var h = state.history[exId];
+    return h && h.length ? h[0] : null;
+  }
+  function cleanNum(v) {
+    v = String(v || '').replace(/\.$/, '');
+    if (v === '' || v === '.') return '';
+    if (v.charAt(0) === '.') v = '0' + v;
+    return v;
+  }
+  function prevText(p) {
+    if (!p || !p.reps) return '–';
+    return p.kg ? p.kg + 'kg x ' + p.reps : p.reps + ' reps';
+  }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return h ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
+  }
+  function elapsed(w) {
+    return w.base + (w.running ? Date.now() - w.startedAt : 0);
+  }
+
+  /* ---------- icons ---------- */
+  var I_PLUS = '<svg class="plus" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6v28M6 20h28"/></svg>';
+  var I_PLUS_SM = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+  var I_DB = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>';
+  var I_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var I_DOTS = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+  var I_TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+  var I_RESET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+  var I_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  var I_MOVE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>';
+  var I_SIZE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/></svg>';
+
+  /* ---------- markup ---------- */
+  var list = document.getElementById('list');
+  var sheet = document.getElementById('sheet');
+  var exSheet = document.getElementById('ex-sheet');
+  var exInput = document.getElementById('ex-input');
+  var exListEl = document.getElementById('ex-list');
+  var exEditBtn = document.getElementById('ex-edit');
+  var exEdit = false;
+  var scrim = document.getElementById('scrim');
+  var hint = document.getElementById('hint');
+  var toastEl = document.getElementById('toast');
+  var lastText = {};
+
+  document.getElementById('pick-thumb').innerHTML = '<span class="time mini">0:00</span>';
+
+  function mbtn(act, label, alt, icon, danger) {
+    return '<button type="button" role="menuitem" data-act="' + act + '"' + (alt ? ' data-confirm="1"' : '') + (danger ? ' class="danger"' : '') + '>' +
+      '<span class="lbl">' + label + '</span>' + (alt ? '<span class="alt">' + alt + '</span>' : '') + icon + '</button>';
+  }
+  function menuHTML(w) {
+    var busy = w.type === 'workout' && w.active;
+    var idle = w.type === 'workout' && !w.active;
+    var h = '<div class="menu" role="menu" aria-label="Widget menu">';
+    if (w.type === 'timer') h += mbtn('reset', 'Reset timer', '', I_RESET, false);
+    if (busy) h += mbtn('discard', 'Discard workout', '', I_X, true);
+    h += mbtn('resize', 'Change widget size', '', I_SIZE, false);
+    h += mbtn('edit', 'Edit layout', '', I_MOVE, false);
+    h += mbtn('wset', 'Edit widget settings', '', I_GEAR, false);
+    h += mbtn('remove', 'Remove widget', busy ? 'Tap again' : '', I_TRASH, true);
+    return h + '</div>';
+  }
+
+  function exHTML(w, i, isLast) {
+    var it = w.items[i], last = lastSession(it.ex);
+    var h = '<section class="ex"><div class="ex-head"><h3>' + esc(exName(it.ex)) + '</h3>' +
+      '<button type="button" class="ex-rm" data-act="rm-ex" data-w="' + w.id + '" data-i="' + i + '" aria-label="Remove exercise">' + I_TRASH + '</button></div>' +
+      '<div class="sets"><div class="set-labels"><span>Set</span><span>Previous</span><span>Reps</span><span>KG</span><span></span></div>';
+    it.sets.forEach(function (s, j) {
+      var p = last && last.sets[j];
+      h += '<div class="set' + (s.done ? ' done' : '') + '" data-w="' + w.id + '" data-i="' + i + '" data-s="' + j + '">' +
+        '<button type="button" class="set-n" data-act="rm-set" aria-label="Remove set ' + (j + 1) + '"><span class="n">' + (j + 1) + '</span><span class="x">' + I_X + '</span></button>' +
+        '<span class="prev">' + esc(prevText(p)) + '</span>' +
+        '<input class="f" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" data-f="reps" placeholder="' + esc(p && p.reps ? p.reps : '0') + '" value="' + esc(s.reps) + '" aria-label="Reps, set ' + (j + 1) + '">' +
+        '<input class="f" type="text" inputmode="decimal" autocomplete="off" maxlength="6" data-f="kg" placeholder="' + esc(p && p.kg ? p.kg : '0') + '" value="' + esc(s.kg) + '" aria-label="Weight in kilograms, set ' + (j + 1) + '">' +
+        '<button type="button" class="chk" data-act="check" aria-pressed="' + (s.done ? 'true' : 'false') + '" aria-label="Mark set ' + (j + 1) + ' done">' + I_CHECK + '</button></div>';
+    });
+    h += '</div><button type="button" class="btn" data-act="add-set" data-w="' + w.id + '" data-i="' + i + '">' + I_PLUS_SM + 'Add set</button>' +
+      (isLast ? '<button type="button" class="btn primary" data-act="add-ex" data-w="' + w.id + '">' + I_PLUS_SM + 'Add exercise</button>' : '') + '</section>';
+    return h;
+  }
+
+  /* ---------- history widget ---------- */
+  var hv = {};
+  function hvOf(id) { return hv[id] || (hv[id] = { open: null, n: 10 }); }
+  var CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+  var lang = 'en';
+  var LOCALES = { en: 'en-GB', fi: 'fi-FI', sv: 'sv-SE', fr: 'fr-FR' };
+  function loc() { return LOCALES[lang] || 'en-GB'; }
+  function fmtDate(t) {
+    var d = new Date(t), o = { weekday: 'short', day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) o.year = 'numeric';
+    try { return d.toLocaleDateString(loc(), o); } catch (e) { return d.toDateString(); }
+  }
+  function fmtShort(t) {
+    var d = new Date(t);
+    try { return d.toLocaleDateString(loc(), { day: 'numeric', month: 'short' }); } catch (e) { return d.toDateString(); }
+  }
+  function fmtDur(ms) {
+    var m = Math.round(ms / 60000);
+    if (m < 1) return '<1 min';
+    if (m < 60) return m + ' min';
+    return Math.floor(m / 60) + ' h ' + pad(m % 60) + ' min';
+  }
+  function fmtNum(n) { return String(+(+n).toFixed(2)); }
+  function setText(s) { return s.kg ? s.kg + 'kg x ' + s.reps : s.reps + ' reps'; }
+  function exNameOr(id, snap) {
+    for (var i = 0; i < state.exercises.length; i++) if (state.exercises[i].id === id) return state.exercises[i].name;
+    return snap || 'Exercise';
+  }
+  function usesKg(hist) {
+    return hist.some(function (se) { return se.sets.some(function (s) { return parseFloat(s.kg) > 0; }); });
+  }
+  function sessionTop(se, kgMode) {
+    var m = 0;
+    se.sets.forEach(function (s) {
+      var v = parseFloat(kgMode ? s.kg : s.reps) || 0;
+      if (v > m) m = v;
+    });
+    return m;
+  }
+  function valText(v, kgMode) { return kgMode ? fmtNum(v) + 'kg' : fmtNum(v) + ' reps'; }
+  function niceStep(x) {
+    var p = Math.pow(10, Math.floor(Math.log(x) / Math.LN10)), n = x / p;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+  }
+  function chipsHTML(sets) {
+    return '<div class="chips">' + sets.map(function (s) { return '<span class="chip">' + esc(setText(s)) + '</span>'; }).join('') + '</div>';
+  }
+
+  /* line chart of the best set per session; the session list under it is the table view */
+  function chartHTML(hist) {
+    var kgMode = usesKg(hist);
+    var pts = hist.slice(0, 20).reverse().map(function (se) { return { t: se.t, v: sessionTop(se, kgMode) }; });
+    if (pts.length < 2) return '<p class="hs-empty">One session so far. Log this exercise again to see your progress.</p>';
+    var W = 320, H = 140, L = 38, R = 14, T = 20, B = 24, n = pts.length, i, v;
+    var lo = Infinity, hi = -Infinity;
+    pts.forEach(function (p) { if (p.v < lo) lo = p.v; if (p.v > hi) hi = p.v; });
+    var step = niceStep((hi - lo || hi || 1) / 3);
+    var y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step;
+    if (y1 === y0) y1 = y0 + step;
+    function X(k) { return L + (W - L - R) * k / (n - 1); }
+    function Y(val) { return T + (H - T - B) * (1 - (val - y0) / (y1 - y0)); }
+    var grid = '';
+    for (v = y0; v <= y1 + step / 1000; v += step) {
+      grid += '<line class="cg" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/>' +
+        '<text class="ct" x="' + (L - 6) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end">' + fmtNum(v) + '</text>';
+    }
+    var line = '';
+    for (i = 0; i < n; i++) line += (i ? ' L ' : 'M ') + X(i).toFixed(1) + ' ' + Y(pts[i].v).toFixed(1);
+    var area = line + ' L ' + X(n - 1).toFixed(1) + ' ' + Y(y0).toFixed(1) + ' L ' + X(0).toFixed(1) + ' ' + Y(y0).toFixed(1) + ' Z';
+    var hw = (W - L - R) / (n - 1), hits = '';
+    for (i = 0; i < n; i++) {
+      var ro = '<b>' + fmtShort(pts[i].t) + '</b> · ' + valText(pts[i].v, kgMode);
+      hits += '<rect class="hit" data-act="hpt" x="' + (X(i) - hw / 2).toFixed(1) + '" y="0" width="' + hw.toFixed(1) + '" height="' + H + '"' +
+        ' data-x="' + X(i).toFixed(1) + '" data-y="' + Y(pts[i].v).toFixed(1) + '" data-ro="' + esc(ro) + '"/>';
+    }
+    var last = pts[n - 1], first = pts[0];
+    var lastRo = '<b>' + esc(fmtShort(last.t)) + '</b> · ' + esc(valText(last.v, kgMode));
+    return '<div class="exchart"><div class="cap">' + (kgMode ? 'Top weight per session' : 'Most reps per session') + '</div>' +
+      '<div class="readout">' + lastRo + '</div>' +
+      '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc((kgMode ? 'Top weight' : 'Most reps') + ' per session, ' + fmtShort(first.t) + ' to ' + fmtShort(last.t) + ', from ' + valText(first.v, kgMode) + ' to ' + valText(last.v, kgMode)) + '">' +
+      grid +
+      '<path class="ca" d="' + area + '"/><path class="cl" d="' + line + '"/>' +
+      '<circle class="cd" cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(last.v).toFixed(1) + '" r="5"/>' +
+      '<text class="ct" x="' + X(n - 1).toFixed(1) + '" y="' + (Y(last.v) - 10).toFixed(1) + '" text-anchor="end">' + fmtNum(last.v) + '</text>' +
+      '<circle class="cd sel" r="5.5" display="none"/>' +
+      '<text class="ct" x="' + L + '" y="' + (H - 6) + '" text-anchor="start">' + esc(fmtShort(first.t)) + '</text>' +
+      '<text class="ct" x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + esc(fmtShort(last.t)) + '</text>' +
+      hits + '</svg></div>';
+  }
+
+  function workoutsTabHTML(w, v) {
+    if (!state.log.length) return '<p class="hs-empty">No workouts yet. Finish a workout and it shows up here.</p>';
+    var rows = '';
+    state.log.slice(0, v.n).forEach(function (e) {
+      var open = v.open === e.id, sets = 0;
+      e.items.forEach(function (it) { sets += it.sets.length; });
+      rows += '<div class="hrow' + (open ? ' open' : '') + '"><button type="button" class="hhead" data-act="hopen" data-w="' + w.id + '" data-k="' + e.id + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        '<span class="hmain"><b>' + esc(fmtDate(e.t)) + '</b><span>' + e.items.length + (e.items.length === 1 ? ' exercise' : ' exercises') + ' · ' + sets + (sets === 1 ? ' set' : ' sets') + '</span></span>' +
+        '<span class="hdur">' + esc(fmtDur(e.dur)) + '</span>' + CHEV + '</button>';
+      if (open) {
+        rows += '<div class="hbody">';
+        e.items.forEach(function (it) {
+          rows += '<div class="hex"><h4>' + esc(exNameOr(it.ex, it.name)) + '</h4>' + chipsHTML(it.sets) + '</div>';
+        });
+        rows += '<button type="button" class="btn danger-btn" data-act="hdel" data-confirm="1" data-w="' + w.id + '" data-k="' + e.id + '"><span class="lbl">Delete workout</span><span class="alt">Tap again to delete</span></button></div>';
+      }
+      rows += '</div>';
+    });
+    if (state.log.length > v.n) rows += '<button type="button" class="btn" data-act="hmore" data-w="' + w.id + '">Show more</button>';
+    return '<div class="hlist">' + rows + '</div>';
+  }
+
+  function exercisesTabHTML(w, v) {
+    var ids = state.exercises.filter(function (e) { return state.history[e.id] && state.history[e.id].length; });
+    if (!ids.length) return '<p class="hs-empty">No exercise history yet. Finish a workout with completed sets to start tracking progress.</p>';
+    ids.sort(function (a, b) { return state.history[b.id][0].t - state.history[a.id][0].t; });
+    var rows = '';
+    ids.forEach(function (e) {
+      var hist = state.history[e.id], kgMode = usesKg(hist), best = 0, open = v.open === e.id;
+      hist.forEach(function (se) { best = Math.max(best, sessionTop(se, kgMode)); });
+      rows += '<div class="hrow' + (open ? ' open' : '') + '"><button type="button" class="hhead" data-act="hopen" data-w="' + w.id + '" data-k="' + e.id + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        '<span class="hmain"><b>' + esc(e.name) + '</b><span>' + hist.length + (hist.length === 1 ? ' session' : ' sessions') + ' · last ' + esc(fmtShort(hist[0].t)) + '</span></span>' +
+        '<span class="hdur">Best ' + esc(valText(best, kgMode)) + '</span>' + CHEV + '</button>';
+      if (open) {
+        rows += '<div class="hbody">' + chartHTML(hist);
+        hist.slice(0, 10).forEach(function (se) {
+          rows += '<div class="hex"><h4>' + esc(fmtDate(se.t)) + '</h4>' + chipsHTML(se.sets) + '</div>';
+        });
+        rows += '</div>';
+      }
+      rows += '</div>';
+    });
+    return '<div class="hlist">' + rows + '</div>';
+  }
+
+  function historyHTML(w) {
+    var v = hvOf(w.id), onEx = w.tab === 'exercises';
+    return '<div class="slot-wrap" data-id="' + w.id + '"' + wrapStyle(w) + '><div class="wk-card fixed">' +
+      '<div class="wk-top"><div class="wk-head" data-press data-wid="' + w.id + '" data-tap="none"><span class="wk-title">' + esc(w.title || 'History') + '</span></div>' +
+      '<button type="button" class="wk-more" data-act="menu" data-w="' + w.id + '" aria-label="Menu">' + I_DOTS + '</button>' + menuHTML(w) + '</div>' +
+      '<div class="wk-scroll"><div class="tabs" role="tablist">' +
+        '<button type="button" role="tab" class="tab' + (onEx ? '' : ' on') + '" aria-selected="' + (onEx ? 'false' : 'true') + '" data-act="htab" data-tab="workouts" data-w="' + w.id + '">Workouts</button>' +
+        '<button type="button" role="tab" class="tab' + (onEx ? ' on' : '') + '" aria-selected="' + (onEx ? 'true' : 'false') + '" data-act="htab" data-tab="exercises" data-w="' + w.id + '">Exercises</button>' +
+      '</div>' + (onEx ? exercisesTabHTML(w, v) : workoutsTabHTML(w, v)) + '</div></div></div>';
+  }
+
+  function libraryHTML(w) {
+    var rows = '', list2 = state.exercises.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    list2.forEach(function (e) {
+      var n = state.history[e.id] ? state.history[e.id].length : 0;
+      rows += '<div class="ex-row edit"><input class="ex-name" type="text" maxlength="40" value="' + esc(e.name) + '" data-lib-ren="' + e.id + '" autocapitalize="words" autocorrect="off" enterkeyhint="done" aria-label="Rename exercise">' +
+        (n ? '<span>' + n + (n === 1 ? ' session' : ' sessions') + '</span>' : '') +
+        '<button type="button" class="ex-rm" data-act="lib-del" data-confirm="1" data-ex="' + e.id + '" aria-label="Delete ' + esc(e.name) + '">' + I_TRASH + '</button></div>';
+    });
+    return '<div class="slot-wrap" data-id="' + w.id + '"' + wrapStyle(w) + '><div class="wk-card fixed">' +
+      '<div class="wk-top"><div class="wk-head" data-press data-wid="' + w.id + '" data-tap="none"><span class="wk-title">' + esc(w.title || 'Exercises') + '</span></div>' +
+      '<button type="button" class="wk-more" data-act="menu" data-w="' + w.id + '" aria-label="Menu">' + I_DOTS + '</button>' + menuHTML(w) + '</div>' +
+      '<div class="wk-scroll"><form class="lib-add" data-lib-form autocomplete="off"><input class="ex-input" type="text" maxlength="40" placeholder="New exercise" autocapitalize="words" autocorrect="off" enterkeyhint="done" aria-label="New exercise name" data-lib-new>' +
+      '<button type="submit" class="btn" aria-label="Add exercise">' + I_PLUS_SM + '</button></form>' +
+      (rows ? '<div class="lib-list">' + rows + '</div>' : '<p class="hs-empty">No exercises yet. Add your first one above.</p>') +
+      '</div></div></div>';
+  }
+
+  /* size in tiles: one tile is one widget height; taller widgets show more */
+  var DEF_TILES = { timer: 1, workout: 3, history: 3, library: 3 };
+  function maxTiles(w) {
+    var s = state.settings;
+    return Math.round(w.type === 'timer' ? s.maxTimer : w.type === 'workout' ? s.maxWorkout : w.type === 'library' ? s.maxLibrary : s.maxHistory);
+  }
+  function tilesOf(w) {
+    var d = w.type === 'workout' && !w.active ? 1 : DEF_TILES[w.type];
+    return Math.max(1, Math.min(maxTiles(w), w.tiles || d || 1));
+  }
+  function wrapStyleStr(w) {
+    var st = [], lk = w.look || {}, s = state.settings;
+    st.push('--n:' + tilesOf(w));
+    if (lk.borderW != null) st.push('--border-w:' + lk.borderW + 'px');
+    if (lk.radius != null) st.push('--radius:' + lk.radius + 'px', '--r-md:' + Math.round(lk.radius * 0.64) + 'px', '--r-sm:' + Math.round(lk.radius * 0.45) + 'px');
+    if (lk.line) st.push('--line:' + lk.line);
+    if (lk.surface || lk.cardOp != null) {
+      var surf = lk.surface || resolvedColors().surface, op = lk.cardOp != null ? lk.cardOp : s.cardOp;
+      st.push('--card-bg:' + (op < 100 ? rgbaOf(surf, op / 100) : surf), '--card-blur:' + (op < 100 ? 'blur(14px)' : 'none'));
+    }
+    return st.join(';');
+  }
+  function wrapStyle(w) { var t = wrapStyleStr(w); return t ? ' style="' + t + '"' : ''; }
+
+  function widgetHTML(w) {
+    if (w.type === 'history') return historyHTML(w);
+    if (w.type === 'library') return libraryHTML(w);
+    var label = w.title ? '<span class="wlabel">' + esc(w.title) + '</span>' : '';
+    if (w.type === 'timer') {
+      return '<div class="slot-wrap" data-id="' + w.id + '"' + wrapStyle(w) + '><div class="slot" role="button" tabindex="0" data-press data-wid="' + w.id + '" data-tap="toggle" aria-label="' + esc(w.title || 'Timer') + '. Tap to start or stop.">' + label +
+        '<div class="lcd-host"></div><span class="dot" hidden></span></div>' + menuHTML(w) + '</div>';
+    }
+    if (!w.active) {
+      return '<div class="slot-wrap" data-id="' + w.id + '"' + wrapStyle(w) + '><div class="slot start" role="button" tabindex="0" data-press data-wid="' + w.id + '" data-tap="start" aria-label="Start workout">' + label +
+        I_DB + '<span>Start workout</span></div>' + menuHTML(w) + '</div>';
+    }
+    var h = '<div class="slot-wrap" data-id="' + w.id + '"' + wrapStyle(w) + '><div class="wk-card fixed">' +
+      '<div class="wk-top"><div class="wk-head" data-press data-wid="' + w.id + '" data-tap="none"><span class="wk-title">' + esc(w.title || 'Workout') + '</span></div>' +
+      '<button type="button" class="wk-more" data-act="menu" data-w="' + w.id + '" aria-label="Menu">' + I_DOTS + '</button>' + menuHTML(w) + '</div><div class="wk-scroll">';
+    w.items.forEach(function (it, i) { h += exHTML(w, i, i === w.items.length - 1); });
+    if (!w.items.length) h += '<button type="button" class="btn primary" data-act="add-ex" data-w="' + w.id + '">' + I_PLUS_SM + 'Add exercise</button>';
+    if (w.items.length) h += '<button type="button" class="btn line" data-act="finish" data-w="' + w.id + '">Finish workout</button>';
+    return h + '</div></div></div>';
+  }
+
+  function render() {
+    disarm();
+    var html = '';
+    state.widgets.forEach(function (w) { html += widgetHTML(w); });
+    var mode = state.settings.addBtn;
+    if (mode === 'slot') {
+      html += '<div class="slot-wrap"><div class="slot empty" role="button" tabindex="0" data-press data-tap="add" aria-label="Add widget">' + addIconHTML() + '</div></div>';
+    }
+    list.innerHTML = html;
+    if (editing) editWraps().forEach(decorateWrap);
+    lastText = {};
+    updateAll();
+    var hintText = state.widgets.length ? 'Press and hold a widget for its menu.' : (mode === 'slot' ? 'Tap the plus to add a widget.' : mode === 'corner' ? 'Add widgets with the plus in the top right corner.' : 'Add widgets from Settings.');
+    hint.textContent = editing ? 'Hold and drag a widget to move it. Drag the bar to resize, tap × to remove.' : hintText;
+  }
+
+  function wrapOf(id) { return list.querySelector('.slot-wrap[data-id="' + id + '"]'); }
+
+  function rerender(id) {
+    disarm();
+    var w = find(id), wrap = wrapOf(id);
+    if (!w || !wrap) { render(); return; }
+    var oldScroll = wrap.querySelector('.wk-scroll'), st = oldScroll ? oldScroll.scrollTop : 0;
+    var t = document.createElement('div');
+    t.innerHTML = widgetHTML(w);
+    wrap.parentNode.replaceChild(t.firstChild, wrap);
+    delete lastText[id];
+    updateOne(w);
+    var newScroll = wrapOf(id) && wrapOf(id).querySelector('.wk-scroll');
+    if (newScroll && st) newScroll.scrollTop = st;
+    if (resizeId === id) resizeId = null;
+    if (editing && wrapOf(id)) decorateWrap(wrapOf(id));
+  }
+
+  function updateOne(w) {
+    var wrap = wrapOf(w.id);
+    if (!wrap) return;
+    if (w.type === 'timer') {
+      var text = fmt(elapsed(w));
+      if (lastText[w.id] !== text) {
+        wrap.querySelector('.lcd-host').innerHTML = '<span class="time">' + text + '</span>';
+        lastText[w.id] = text;
+      }
+      wrap.querySelector('.dot').hidden = !w.running;
+    }
+  }
+  function updateAll() { state.widgets.forEach(updateOne); }
+
+  setInterval(function () {
+    state.widgets.forEach(function (w) {
+      if (w.type === 'timer' && w.running) updateOne(w);
+    });
+  }, 250);
+  document.addEventListener('visibilitychange', updateAll);
+
+  /* ---------- timer and workout actions ---------- */
+  function toggleTimer(id) {
+    var w = find(id);
+    if (!w || w.type !== 'timer') return;
+    if (w.running) { w.base += Date.now() - w.startedAt; w.running = false; }
+    else { w.startedAt = Date.now(); w.running = true; }
+    save();
+    updateOne(w);
+  }
+  function startWorkout(id) {
+    var w = find(id);
+    if (!w || w.type !== 'workout') return;
+    w.active = true;
+    w.startedAt = Date.now();
+    w.items = [];
+    save();
+    rerender(id);
+  }
+  function finishWorkout(w) {
+    var saved = 0, now = Date.now(), logItems = [];
+    w.items.forEach(function (it) {
+      var sets = [];
+      it.sets.forEach(function (s) {
+        if (s.done && s.reps) sets.push({ reps: cleanNum(s.reps), kg: cleanNum(s.kg) });
+      });
+      if (sets.length) {
+        var h = state.history[it.ex] || (state.history[it.ex] = []);
+        h.unshift({ t: now, sets: sets });
+        if (h.length > 50) h.length = 50;
+        logItems.push({ ex: it.ex, name: exName(it.ex), sets: sets });
+        saved++;
+      }
+    });
+    if (logItems.length) {
+      state.log.unshift({ id: uid(), t: now, dur: now - w.startedAt, items: logItems });
+      if (state.log.length > 100) state.log.length = 100;
+    }
+    w.active = false;
+    w.items = [];
+    w.startedAt = 0;
+    save();
+    rerender(w.id);
+    toast(saved ? 'Workout saved' : 'Workout closed, no completed sets');
+  }
+  function runTap(tap, id) {
+    if (tap === 'toggle') toggleTimer(id);
+    else if (tap === 'start') startWorkout(id);
+    else if (tap === 'add') openSheet();
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+  }
+
+  /* two-tap confirmation for destructive buttons (no confirm() dialogs in artifacts) */
+  var armedBtn = null, armTimer = null;
+  function disarm() {
+    if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+    if (armedBtn) { armedBtn.classList.remove('armed'); armedBtn = null; }
+  }
+  function confirmTap(b) {
+    if (armedBtn === b) { disarm(); return true; }
+    disarm();
+    armedBtn = b;
+    b.classList.add('armed');
+    armTimer = setTimeout(disarm, 2500);
+    return false;
+  }
+
+  /* ---------- menu and sheets ---------- */
+  var menuId = null, sheetOpen = false, addTarget = null, resizeId = null;
+
+  function openMenu(id) {
+    if (menuId) return;
+    var wrap = wrapOf(id);
+    if (!wrap) return;
+    menuId = id;
+    var lift = wrap.querySelector('.slot, .wk-card');
+    var anchor = wrap.querySelector('.slot, .wk-head');
+    var menu = wrap.querySelector('.menu');
+    var r = anchor.getBoundingClientRect();
+    menu.classList.toggle('up', window.innerHeight - r.bottom < 340);
+    lift.classList.add('lifted');
+    menu.classList.add('show');
+    scrim.classList.add('show');
+  }
+  function closeMenu() {
+    if (menuId) {
+      var wrap = wrapOf(menuId);
+      if (wrap) {
+        var lift = wrap.querySelector('.slot, .wk-card');
+        if (lift) lift.classList.remove('lifted');
+        wrap.querySelector('.menu').classList.remove('show');
+      }
+    }
+    menuId = null;
+    disarm();
+    if (!sheetOpen && !resizeId) scrim.classList.remove('show');
+  }
+  function openSheet() {
+    if (sheetOpen) return;
+    sheetOpen = true;
+    sheet.classList.add('show');
+    scrim.classList.add('show');
+  }
+  function openExSheet(wid) {
+    if (sheetOpen) return;
+    addTarget = wid;
+    exInput.value = '';
+    exEdit = false;
+    renderExList();
+    sheetOpen = true;
+    exSheet.classList.add('show');
+    scrim.classList.add('show');
+    if (!state.exercises.length) exInput.focus();
+  }
+  function closeSheet() {
+    sheetOpen = false;
+    sheet.classList.remove('show');
+    exSheet.classList.remove('show');
+    exInput.blur();
+    if (!menuId && !resizeId) scrim.classList.remove('show');
+  }
+  function closeAll() { closeMenu(); closeSheet(); endResize(); endEdit(); closeSettings(); closeWSettings(); }
+
+  scrim.addEventListener('click', function () { if (resizeId) return; closeAll(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function (b) { b.addEventListener('click', closeSheet); });
+
+  /* tapping outside a text field closes the number pad, which has no Done key */
+  document.addEventListener('pointerdown', function (e) {
+    var a = document.activeElement;
+    if (a && a.tagName === 'INPUT' && !e.target.closest('input')) a.blur();
+  });
+
+  /* keep sheets above the on-screen keyboard */
+  var vv = window.visualViewport;
+  function vpUpdate() {
+    if (!vv) return;
+    var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    var st = document.documentElement.style;
+    st.setProperty('--kb', (kb > 80 ? kb : 0) + 'px');
+    st.setProperty('--vvh', vv.height + 'px');
+  }
+  if (vv) { vv.addEventListener('resize', vpUpdate); vv.addEventListener('scroll', vpUpdate); vpUpdate(); }
+
+  /* widget picker */
+  Array.prototype.forEach.call(sheet.querySelectorAll('.pick'), function (b) {
+    b.addEventListener('click', function () {
+      var type = b.getAttribute('data-type');
+      state.widgets.push(type === 'workout' ? newWorkout() : type === 'history' ? newHistory() : type === 'library' ? newLibrary() : newTimer());
+      save();
+      closeSheet();
+      render();
+      var add = list.lastElementChild;
+      if (add && add.scrollIntoView) add.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+
+  /* exercise picker */
+  function createExercise(name) {
+    name = String(name || '').trim().slice(0, 40);
+    if (!name) return null;
+    var low = name.toLowerCase();
+    for (var i = 0; i < state.exercises.length; i++) {
+      if (state.exercises[i].name.toLowerCase() === low) return state.exercises[i].id;
+    }
+    var ex = { id: uid(), name: name };
+    state.exercises.push(ex);
+    save();
+    refreshExerciseViews();
+    return ex.id;
+  }
+  function renderExList() {
+    disarm();
+    if (!state.exercises.length) exEdit = false;
+    exEditBtn.hidden = !state.exercises.length;
+    exEditBtn.textContent = exEdit ? 'Done' : 'Edit';
+    var q = exInput.value.trim(), ql = q.toLowerCase();
+    var exact = state.exercises.some(function (e) { return e.name.toLowerCase() === ql; });
+    var items = state.exercises.filter(function (e) { return !ql || e.name.toLowerCase().indexOf(ql) > -1; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name); });
+    var h = '';
+    if (q && !exact && !exEdit) {
+      h += '<button type="button" class="ex-row create" data-new="1"><b>Create “' + esc(q) + '”</b>' + I_PLUS_SM + '</button>';
+    }
+    items.forEach(function (e) {
+      if (exEdit) {
+        h += '<div class="ex-row edit"><input class="ex-name" type="text" maxlength="40" value="' + esc(e.name) + '" data-ren="' + e.id + '" autocapitalize="words" autocorrect="off" enterkeyhint="done" aria-label="Rename exercise">' +
+          '<button type="button" class="ex-rm" data-del="' + e.id + '" aria-label="Delete ' + esc(e.name) + '">' + I_TRASH + '</button></div>';
+        return;
+      }
+      var last = lastSession(e.id), meta = '';
+      if (last) {
+        var top = 0;
+        last.sets.forEach(function (s) { top = Math.max(top, parseFloat(s.kg) || 0); });
+        meta = 'Last: ' + last.sets.length + (last.sets.length === 1 ? ' set' : ' sets') + (top ? ', up to ' + top + 'kg' : '');
+      }
+      h += '<button type="button" class="ex-row" data-ex="' + e.id + '"><b>' + esc(e.name) + '</b><span>' + esc(meta) + '</span></button>';
+    });
+    if (!state.exercises.length && !q) {
+      h = '<p class="ex-empty">No exercises yet. Type a name above to create your first one.</p>';
+    } else if (!items.length && !q) {
+      h = '';
+    }
+    exListEl.innerHTML = h;
+  }
+  function addExerciseToWorkout(exId) {
+    var w = find(addTarget);
+    if (!w || w.type !== 'workout' || !exId) { closeSheet(); return; }
+    var last = lastSession(exId);
+    var n = Math.min(12, Math.max(1, last ? last.sets.length : 1)), sets = [];
+    for (var i = 0; i < n; i++) sets.push({ reps: '', kg: '', done: false });
+    w.items.push({ ex: exId, sets: sets });
+    save();
+    closeSheet();
+    rerender(w.id);
+  }
+  exInput.addEventListener('input', renderExList);
+  document.getElementById('ex-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var id = createExercise(exInput.value);
+    if (id) addExerciseToWorkout(id);
+  });
+  function deleteExercise(id) {
+    state.exercises = state.exercises.filter(function (x) { return x.id !== id; });
+    delete state.history[id];
+    state.widgets.forEach(function (w) {
+      if (w.type === 'workout' && w.items.some(function (it) { return it.ex === id; })) {
+        w.items = w.items.filter(function (it) { return it.ex !== id; });
+        rerender(w.id);
+      }
+    });
+    save();
+  }
+  exEditBtn.addEventListener('click', function () {
+    exEdit = !exEdit;
+    renderExList();
+  });
+  exListEl.addEventListener('change', function (e) {
+    var inp = e.target.closest('input[data-ren]');
+    if (!inp) return;
+    var id = inp.getAttribute('data-ren'), ex = null, i;
+    for (i = 0; i < state.exercises.length; i++) if (state.exercises[i].id === id) ex = state.exercises[i];
+    if (!ex) return;
+    var name = inp.value.trim().slice(0, 40), low = name.toLowerCase();
+    var dup = state.exercises.some(function (x) { return x.id !== id && x.name.toLowerCase() === low; });
+    if (!name || dup) {
+      inp.value = ex.name;
+      toast(dup ? 'An exercise with that name already exists' : 'Name can’t be empty');
+      return;
+    }
+    ex.name = name;
+    inp.value = name;
+    save();
+    refreshExerciseViews();
+  });
+  exListEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.matches('input[data-ren]')) { e.preventDefault(); e.target.blur(); }
+  });
+  exListEl.addEventListener('click', function (e) {
+    var del = e.target.closest('[data-del]');
+    if (armedBtn && armedBtn !== del) disarm();
+    if (del) {
+      if (confirmTap(del)) { deleteExercise(del.getAttribute('data-del')); refreshExerciseViews(); renderExList(); }
+      return;
+    }
+    if (exEdit) return;
+    var b = e.target.closest('.ex-row');
+    if (!b) return;
+    if (b.hasAttribute('data-new')) addExerciseToWorkout(createExercise(exInput.value));
+    else addExerciseToWorkout(b.getAttribute('data-ex'));
+  });
+
+  /* ---------- clicks inside widgets ---------- */
+  list.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]');
+    if (armedBtn && armedBtn !== b) disarm();
+    if (!b) return;
+    var act = b.getAttribute('data-act');
+    var wrap = b.closest('.slot-wrap');
+    var wid = b.getAttribute('data-w') || (wrap && wrap.getAttribute('data-id'));
+    var w = find(wid);
+    if (!w) return;
+    if (b.hasAttribute('data-confirm') || act === 'rm-ex' || act === 'rm-set') {
+      if (!confirmTap(b)) return;
+    }
+    var row = b.closest('.set');
+    var i = row ? +row.getAttribute('data-i') : +b.getAttribute('data-i');
+    var j = row ? +row.getAttribute('data-s') : -1;
+
+    if (act === 'menu') {
+      if (menuId) closeMenu(); else openMenu(w.id);
+    } else if (act === 'reset') {
+      closeMenu();
+      w.running = false; w.startedAt = 0; w.base = 0;
+      save();
+      updateOne(w);
+    } else if (act === 'discard') {
+      closeMenu();
+      w.active = false; w.items = []; w.startedAt = 0;
+      save();
+      rerender(w.id);
+    } else if (act === 'remove' || act === 'ed-x') {
+      closeMenu();
+      state.widgets = state.widgets.filter(function (x) { return x.id !== w.id; });
+      save();
+      render();
+    } else if (act === 'edit') {
+      closeMenu();
+      enterEdit();
+    } else if (act === 'lib-del') {
+      deleteExercise(b.getAttribute('data-ex'));
+      refreshExerciseViews();
+    } else if (act === 'resize') {
+      closeMenu();
+      startResize(w.id);
+    } else if (act === 'rz-done') {
+      endResize();
+    } else if (act === 'wset') {
+      closeMenu();
+      openWidgetSettings(w.id);
+    } else if (act === 'add-ex') {
+      openExSheet(w.id);
+    } else if (act === 'add-set') {
+      if (w.items[i]) {
+        w.items[i].sets.push({ reps: '', kg: '', done: false });
+        save();
+        rerender(w.id);
+      }
+    } else if (act === 'rm-ex') {
+      w.items.splice(i, 1);
+      save();
+      rerender(w.id);
+    } else if (act === 'rm-set') {
+      if (w.items[i]) {
+        w.items[i].sets.splice(j, 1);
+        save();
+        rerender(w.id);
+      }
+    } else if (act === 'check') {
+      var it = w.items[i], s = it && it.sets[j];
+      if (!s) return;
+      if (s.done) {
+        s.done = false;
+      } else {
+        var last = lastSession(it.ex), p = last && last.sets[j];
+        if (!s.reps && p && p.reps) s.reps = p.reps;
+        if (!s.kg && p && p.kg) s.kg = p.kg;
+        if (!s.reps) {
+          row.classList.add('shake');
+          setTimeout(function () { row.classList.remove('shake'); }, 350);
+          row.querySelector('[data-f="reps"]').focus();
+          return;
+        }
+        s.kg = cleanNum(s.kg);
+        s.done = true;
+      }
+      row.querySelector('[data-f="reps"]').value = s.reps;
+      row.querySelector('[data-f="kg"]').value = s.kg;
+      row.classList.toggle('done', s.done);
+      b.setAttribute('aria-pressed', s.done ? 'true' : 'false');
+      save();
+    } else if (act === 'finish') {
+      finishWorkout(w);
+    } else if (act === 'htab') {
+      w.tab = b.getAttribute('data-tab') === 'exercises' ? 'exercises' : 'workouts';
+      hvOf(w.id).open = null;
+      save();
+      rerender(w.id);
+    } else if (act === 'hopen') {
+      var hvw = hvOf(w.id), hk = b.getAttribute('data-k');
+      hvw.open = hvw.open === hk ? null : hk;
+      rerender(w.id);
+    } else if (act === 'hmore') {
+      hvOf(w.id).n += 10;
+      rerender(w.id);
+    } else if (act === 'hdel') {
+      var key = b.getAttribute('data-k'), entry = null;
+      state.log.forEach(function (x) { if (x.id === key) entry = x; });
+      if (entry) {
+        entry.items.forEach(function (li) {
+          if (state.history[li.ex]) state.history[li.ex] = state.history[li.ex].filter(function (se) { return se.t !== entry.t; });
+        });
+        state.log = state.log.filter(function (x) { return x.id !== key; });
+      }
+      hvOf(w.id).open = null;
+      save();
+      rerender(w.id);
+    } else if (act === 'hpt') {
+      var svg = b.closest('svg'), sel = svg.querySelector('.sel'), box = b.closest('.exchart');
+      sel.setAttribute('cx', b.getAttribute('data-x'));
+      sel.setAttribute('cy', b.getAttribute('data-y'));
+      sel.removeAttribute('display');
+      box.querySelector('.readout').innerHTML = b.getAttribute('data-ro');
+    }
+  });
+
+  /* number fields: digits only (reps) or digits plus one decimal separator (kg) */
+  list.addEventListener('input', function (e) {
+    var inp = e.target.closest('input[data-f]');
+    if (!inp) return;
+    var row = inp.closest('.set');
+    var w = find(row.getAttribute('data-w'));
+    var it = w && w.items[+row.getAttribute('data-i')];
+    var s = it && it.sets[+row.getAttribute('data-s')];
+    if (!s) return;
+    var f = inp.getAttribute('data-f'), v = inp.value;
+    if (f === 'reps') {
+      v = v.replace(/[^0-9]/g, '').slice(0, 4);
+    } else {
+      v = v.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+      var d = v.indexOf('.');
+      if (d > -1) v = v.slice(0, d + 1) + v.slice(d + 1).replace(/\./g, '');
+      v = v.slice(0, 6);
+    }
+    if (v !== inp.value) inp.value = v;
+    s[f] = v;
+    save();
+  });
+
+  /* ---------- press handling: tap or long press on slots and workout header ---------- */
+  var pressTimer = null, pressing = false, longFired = false, pressId = null, pressTap = '', sx = 0, sy = 0;
+  var LONG_MS = 450;
+
+  function cancelTimer() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  }
+
+  list.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest('[data-press]');
+    if (!el || e.target.closest('button, input')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (menuId) { closeMenu(); pressing = false; return; }
+    pressing = true;
+    longFired = false;
+    sx = e.clientX; sy = e.clientY;
+    pressId = el.getAttribute('data-wid');
+    pressTap = el.getAttribute('data-tap') || '';
+    if (pressId) {
+      var id = pressId;
+      pressTimer = setTimeout(function () {
+        pressTimer = null;
+        longFired = true;
+        openMenu(id);
+      }, LONG_MS);
+    }
+  });
+  list.addEventListener('pointermove', function (e) {
+    if (!pressing) return;
+    if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) {
+      cancelTimer();
+      pressing = false;
+    }
+  });
+  list.addEventListener('pointerup', function () {
+    if (!pressing) return;
+    pressing = false;
+    cancelTimer();
+    if (longFired) return;
+    runTap(pressTap, pressId);
+  });
+  list.addEventListener('pointercancel', function () {
+    pressing = false;
+    cancelTimer();
+  });
+  list.addEventListener('contextmenu', function (e) {
+    var el = e.target.closest('[data-press]');
+    if (!el || e.target.closest('input')) return;
+    e.preventDefault();
+    var id = el.getAttribute('data-wid');
+    if (id && !menuId) openMenu(id);
+  });
+  list.addEventListener('keydown', function (e) {
+    var el = e.target.closest('[data-press]');
+    if (!el || e.target !== el) return;
+    var id = el.getAttribute('data-wid');
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (menuId) closeMenu();
+      else runTap(el.getAttribute('data-tap'), id);
+    } else if (id && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+      e.preventDefault();
+      openMenu(id);
+      var first = wrapOf(id).querySelector('.menu button');
+      if (first) first.focus({ preventScroll: true });
+    }
+  });
+
+  /* =====================================================================
+     Appearance settings
+     ===================================================================== */
+  var rootEl = document.documentElement;
+  var page = document.getElementById('settings');
+  var stBody = document.getElementById('st-body');
+  var hdrAdd = document.getElementById('hdr-add');
+  var hdrGear = document.getElementById('hdr-gear');
+  var bgfx = document.getElementById('bgfx');
+  var I_GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>';
+  hdrGear.innerHTML = I_GEAR;
+  hdrAdd.innerHTML = I_PLUS_SM;
+
+  function S() { return state.settings; }
+
+  function addIconHTML() {
+    var a = S().addIcon;
+    if (a === 'circle') return '<svg class="plus" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15"/><path d="M20 12v16M12 20h16"/></svg>';
+    if (a === 'square') return '<svg class="plus" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="6" width="28" height="28" rx="8"/><path d="M20 13v14M13 20h14"/></svg>';
+    if (a === 'text') return '<span class="addtxt">Add widget</span>';
+    return I_PLUS;
+  }
+
+  /* ----- fonts ----- */
+  function allFonts() {
+    var out = FONTS.slice();
+    customFonts.forEach(function (f) {
+      out.push({ id: f.id, label: f.label, stack: "'" + f.label + "', system-ui, sans-serif", custom: true });
+    });
+    return out;
+  }
+  function fontById(id) {
+    var all = allFonts();
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return FONTS[9];
+  }
+  var gLoaded = {};
+  function loadGoogle(label, spec, cb) {
+    if (gLoaded[label]) { if (cb) cb(true); return; }
+    var tries = [spec, encodeURIComponent(label).replace(/%20/g, '+')];
+    (function attempt(i) {
+      if (i >= tries.length) { if (cb) cb(false); return; }
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = 'https://fonts.googleapis.com/css2?family=' + tries[i] + '&display=swap';
+      l.onload = function () { gLoaded[label] = true; if (cb) cb(true); };
+      l.onerror = function () { if (l.parentNode) l.parentNode.removeChild(l); attempt(i + 1); };
+      document.head.appendChild(l);
+    })(0);
+  }
+  function registerFileFont(f, cb) {
+    try {
+      var ff = new FontFace(f.label, 'url(' + f.data + ')');
+      ff.load().then(function () { document.fonts.add(ff); if (cb) cb(true); }, function () { if (cb) cb(false); });
+    } catch (e) { if (cb) cb(false); }
+  }
+  function initFonts() {
+    FONTS.forEach(function (f) { if (f.g) loadGoogle(f.label, f.g); });
+    customFonts.forEach(function (f) {
+      if (f.kind === 'file') registerFileFont(f);
+      else loadGoogle(f.label, encodeURIComponent(f.label).replace(/%20/g, '+') + ':wght@400;500;600');
+    });
+  }
+  function saveFonts() {
+    try { localStorage.setItem(FKEY, JSON.stringify(customFonts)); return true; } catch (e) { return false; }
+  }
+
+  /* ----- colors and look ----- */
+  function systemDark() {
+    var a = rootEl.getAttribute('data-theme');
+    if (a === 'dark') return true;
+    if (a === 'light') return false;
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function baseColors(theme) {
+    if (theme === 'auto') return systemDark() ? PRESETS.dark : PRESETS.light;
+    return PRESETS[theme] || PRESETS.light;
+  }
+  function resolvedColors() {
+    var s = S(), base = baseColors(s.theme), c = {};
+    CTOK.forEach(function (t) { c[t[0]] = s.colors[t[0]] || base[t[0]]; });
+    return c;
+  }
+  function bgImageCss() {
+    var s = S(), c = resolvedColors();
+    if (s.bgType === 'gradient') {
+      var c1 = s.bgC1 || c.bg, c2 = s.bgC2 || mixHex(c.bg, c.run, 0.35);
+      return 'linear-gradient(' + s.bgAngle + 'deg, ' + c1 + ', ' + c2 + ')';
+    }
+    if (s.bgType === 'image' && bgImage) {
+      var d = s.bgDim / 100;
+      return (d ? 'linear-gradient(rgba(0,0,0,' + d + '), rgba(0,0,0,' + d + ')), ' : '') + 'url("' + bgImage + '")';
+    }
+    return '';
+  }
+  function paintBg(el) {
+    var img = bgImageCss();
+    el.style.backgroundImage = img;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    return img;
+  }
+
+  function applyLook() {
+    var s = S(), r = rootEl.style, c = resolvedColors(), dark = lumOf(c.bg) < 0.4;
+    CTOK.forEach(function (t) { r.setProperty('--' + t[0], c[t[0]]); });
+    r.setProperty('--hairline', rgbaOf(c.ink, dark ? 0.14 : 0.12));
+    r.setProperty('--field', mixHex(c.surface, c.ink, dark ? 0.09 : 0.06));
+    r.setProperty('--done-bg', rgbaOf(c.run, dark ? 0.16 : 0.13));
+    r.setProperty('--scrim', dark ? 'rgba(0,0,0,0.5)' : 'rgba(14,16,19,0.28)');
+    r.setProperty('--shadow', dark ? 'rgba(0,0,0,0.6)' : 'rgba(14,16,19,0.22)');
+    r.setProperty('--on-run', lumOf(c.run) > 0.35 ? '#07220f' : '#ffffff');
+    r.setProperty('color-scheme', dark ? 'dark' : 'light');
+    r.setProperty('--font-ui', fontById(s.font).stack);
+    var tc = document.querySelector('meta[name="theme-color"]');
+    if (tc) tc.setAttribute('content', c.bg);
+
+    r.setProperty('--border-w', s.borderW + 'px');
+    r.setProperty('--hair-w', s.hairW + 'px');
+    r.setProperty('--radius', s.radius + 'px');
+    r.setProperty('--r-md', Math.round(s.radius * 0.64) + 'px');
+    r.setProperty('--r-sm', Math.round(s.radius * 0.45) + 'px');
+    r.setProperty('--gap', s.gap + 'px');
+    r.setProperty('--slot-h', s.slotH + 'px');
+    r.setProperty('--time-size', s.timeSize + 'px');
+    r.setProperty('--card-bg', s.cardOp < 100 ? rgbaOf(c.surface, s.cardOp / 100) : c.surface);
+    r.setProperty('--card-blur', s.cardOp < 100 ? 'blur(14px)' : 'none');
+
+    r.setProperty('--icon-w', s.iconW + 'px');
+    r.setProperty('--icon-cap', s.iconCap);
+    r.setProperty('--icon-join', s.iconCap === 'square' ? 'miter' : 'round');
+
+    var a = ANIMS[s.anim];
+    r.setProperty('--dur', a.dur);
+    r.setProperty('--dur-l', a.durL);
+    r.setProperty('--ease', a.ease);
+    r.setProperty('--ease-sheet', a.sheet);
+    r.setProperty('--ease-pop', a.pop);
+    r.setProperty('--lift', a.lift);
+    r.setProperty('--press', a.press);
+    r.setProperty('--pop-from', a.from);
+    rootEl.setAttribute('data-anim', s.anim === 'none' ? 'none' : 'on');
+
+    bgfx.hidden = !paintBg(bgfx);
+    hdrAdd.hidden = s.addBtn !== 'corner';
+    var pv = document.getElementById('bg-prev');
+    if (pv) paintBg(pv);
+  }
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onMq = function () { if (S().theme === 'auto') { applyLook(); if (page.classList.contains('show')) refresh(['colors', 'widgets', 'bg']); } };
+    if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
+  }
+
+  var saveTimer = null;
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 250);
+  }
+
+  /* ----- settings page builders ----- */
+  function sampleSetsHTML(title) {
+    return '<div class="wk-top"><div class="wk-head"><span class="wk-title">' + esc(title || 'Barbell Bench Press') + '</span></div><span class="wk-more">' + I_DOTS + '</span></div>' +
+      '<div class="sets"><div class="set-labels"><span>Set</span><span>Previous</span><span>Reps</span><span>KG</span><span></span></div>' +
+      '<div class="set done"><span class="set-n"><span class="n">1</span></span><span class="prev">80kg x 8</span><div class="f">8</div><div class="f">82.5</div><span class="chk">' + I_CHECK + '</span></div>' +
+      '<div class="set"><span class="set-n"><span class="n">2</span></span><span class="prev">85kg x 6</span><div class="f">&nbsp;</div><div class="f">&nbsp;</div><span class="chk">' + I_CHECK + '</span></div></div>';
+  }
+  function sampleTimerHTML(small) {
+    return '<div class="slot"' + (small ? ' style="height:84px"' : '') + '><span class="time"' + (small ? ' style="font-size:40px"' : '') + '>12:34</span><span class="dot"></span></div>';
+  }
+  function sliderHTML(key, label) {
+    var d = SL[key], v = S()[key];
+    return '<div class="sl"><div class="sl-top"><label for="sl-' + key + '">' + label + '</label><output id="o-' + key + '">' + v + d.u + '</output></div>' +
+      '<input id="sl-' + key + '" type="range" data-sl="' + key + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '" value="' + v + '"></div>';
+  }
+  function colorRowHTML(pfx, key, kind, label, value) {
+    return '<div class="crow"><label for="' + pfx + key + '">' + esc(label) + '</label>' +
+      '<input class="csw" type="color" id="' + pfx + key + '" data-c="' + key + '" data-k="' + kind + '" value="' + value + '">' +
+      '<input class="chex" type="text" data-ch="' + key + '" data-k="' + kind + '" value="' + value.toUpperCase() + '" maxlength="7" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="' + esc(label) + ' hex code"></div>';
+  }
+
+  function secFont() {
+    var s = S(), h = '<h2>Font</h2><p class="st-sub">Used everywhere in the app, including the timer.</p>';
+    h += '<div class="pv"><div class="pv-box">' + sampleTimerHTML(true) + '<div class="wk-card" style="margin-top:10px">' + sampleSetsHTML() + '</div></div></div>';
+    h += '<div class="st-card"><div class="fgrid" role="listbox" aria-label="Font">';
+    allFonts().forEach(function (f) {
+      h += '<button type="button" role="option" class="fopt' + (f.id === s.font ? ' on' : '') + '" aria-selected="' + (f.id === s.font ? 'true' : 'false') + '" data-act="s-font" data-id="' + f.id + '" style="font-family:' + esc(f.stack) + '">' + esc(f.label) + '</button>';
+    });
+    h += '</div>';
+    var cur = fontById(s.font);
+    if (cur.custom) h += '<button type="button" class="btn danger-btn" data-act="s-rm-font" data-confirm="1"><span class="lbl">Remove “' + esc(cur.label) + '”</span><span class="alt">Tap again to remove</span></button>';
+    h += '<div class="cf"><h3>Add your own font</h3>' +
+      '<form id="gf-form" autocomplete="off"><input class="ex-input" id="gf-name" type="text" maxlength="40" placeholder="Google Fonts name, e.g. Space Mono" autocapitalize="words" autocorrect="off" aria-label="Google Fonts name"><button type="submit" class="btn">Add from Google Fonts</button></form>' +
+      '<label class="btn" for="ff-file">Upload a font file</label><input class="vh" id="ff-file" type="file" accept=".ttf,.otf,.woff,.woff2,font/*">' +
+      '<p class="fnote">Font files (.ttf, .otf, .woff, .woff2, up to 1.5 MB) are stored on this device only. Fonts with a single weight get a synthesized bold.</p></div></div>';
+    return h;
+  }
+
+  function secColors() {
+    var s = S(), c = resolvedColors(), h = '<h2>Colors</h2><p class="st-sub">Pick a preset, then change any single color.</p>';
+    h += '<div class="pv"><div class="pv-box">' + sampleTimerHTML(true) + '<div class="wk-card" style="margin-top:10px">' + sampleSetsHTML() + '<div class="btn primary">Add exercise</div></div></div></div>';
+    h += '<div class="st-card"><div class="themes">';
+    PRESET_ORDER.forEach(function (id) {
+      var p = id === 'auto' ? PRESETS.light : PRESETS[id], q = id === 'auto' ? PRESETS.dark : p;
+      h += '<button type="button" class="theme' + (s.theme === id ? ' on' : '') + '" data-act="s-theme" data-id="' + id + '" aria-pressed="' + (s.theme === id ? 'true' : 'false') + '">' +
+        '<div class="tsw"><span style="background:' + p.bg + '"></span><span style="background:' + q.bg + '"></span>' +
+        '<i style="border-color:' + p.line + ';background:' + (id === 'auto' ? 'linear-gradient(90deg,' + p.surface + ' 50%,' + q.surface + ' 50%)' : p.surface) + '"><b style="background:' + (id === 'auto' ? q.ink : p.ink) + '"></b><em style="background:' + p.run + '"></em></i></div>' +
+        (id === 'auto' ? 'Auto' : p.name) + '</button>';
+    });
+    h += '</div>';
+    var custom = Object.keys(s.colors).length > 0;
+    h += '<p class="sw-hint">' + (s.theme === 'auto' ? 'Auto follows your phone’s light or dark mode.' : 'Preset: ' + PRESETS[s.theme].name + '.') + (custom ? ' Custom colors are applied on top.' : '') + '</p>';
+    CTOK.forEach(function (t) { h += colorRowHTML('c-', t[0], 't', t[1], c[t[0]]); });
+    if (custom) h += '<button type="button" class="btn" data-act="s-reset-colors">Reset custom colors</button>';
+    return h + '</div>';
+  }
+
+  function previewIconsHTML() {
+    return '<div class="pv-icons">' + addIconSvg(S().addIcon, true) + I_DOTS + I_CHECK + I_TRASH + CHEV + I_X + I_GEAR + '</div>';
+  }
+  function addIconSvg(kind, small) {
+    if (kind === 'text') return small ? '<span style="font-size:12px;font-weight:600">Add</span>' : '<span style="font-size:12px">Text</span>';
+    if (kind === 'circle') return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15"/><path d="M20 12v16M12 20h16"/></svg>';
+    if (kind === 'square') return '<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="6" width="28" height="28" rx="8"/><path d="M20 13v14M13 20h14"/></svg>';
+    return '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6v28M6 20h28"/></svg>';
+  }
+  function secIcons() {
+    var s = S(), h = '<h2>Icons</h2><p class="st-sub">Style for every icon in the app.</p>';
+    h += previewIconsHTML();
+    h += '<div class="st-card"><div class="irow"><span>Add widget icon</span><div class="iopts">';
+    ['plus', 'circle', 'square', 'text'].forEach(function (k) {
+      h += '<button type="button" class="iopt' + (s.addIcon === k ? ' on' : '') + '" data-act="s-icon" data-id="' + k + '" aria-pressed="' + (s.addIcon === k ? 'true' : 'false') + '" aria-label="' + (k === 'text' ? 'Text label' : k + ' plus') + '">' + addIconSvg(k, false) + '</button>';
+    });
+    h += '</div></div><div class="irow"><span>Line ends</span><div class="iopts">';
+    [['round', 'Round', 'round'], ['square', 'Square', 'butt']].forEach(function (o) {
+      h += '<button type="button" class="iopt' + (s.iconCap === o[0] ? ' on' : '') + '" data-act="s-cap" data-id="' + o[0] + '" aria-pressed="' + (s.iconCap === o[0] ? 'true' : 'false') + '" aria-label="' + o[1] + ' line ends"><svg viewBox="0 0 24 24" aria-hidden="true"><path style="stroke-linecap:' + o[2] + ';stroke-linejoin:' + (o[0] === 'round' ? 'round' : 'miter') + '" d="M7 17L12 7l5 10"/></svg></button>';
+    });
+    h += '</div></div>' + sliderHTML('iconW', 'Icon thickness') + '<p class="fnote">The plus in the add widget box follows the border thickness under Widgets.</p></div>';
+    return h;
+  }
+
+  function secWidgets() {
+    var c = resolvedColors(), h = '<h2>Widgets</h2><p class="st-sub">Borders, size and spacing of every widget.</p>';
+    h += '<div class="pv"><div class="pv-box"><div style="display:flex;flex-direction:column;gap:var(--gap)">' + sampleTimerHTML(false) +
+      (S().addBtn === 'hidden' ? '' : '<div class="slot">' + addIconHTML() + '</div>') + '</div></div></div>';
+    h += '<div class="st-card">' + colorRowHTML('w-', 'line', 't', 'Border color', c.line) + colorRowHTML('w-', 'surface', 't', 'Widget color', c.surface) +
+      sliderHTML('borderW', 'Border thickness') + sliderHTML('hairW', 'Divider thickness') + sliderHTML('radius', 'Corner radius') +
+      sliderHTML('gap', 'Space between widgets') + sliderHTML('slotH', 'Widget height') + sliderHTML('timeSize', 'Timer text size') + sliderHTML('cardOp', 'Widget opacity') +
+      '<h3>Largest size a widget can be</h3>' + sliderHTML('maxTimer', 'Timer') + sliderHTML('maxWorkout', 'Workout') + sliderHTML('maxHistory', 'History') + sliderHTML('maxLibrary', 'Exercises') +
+      '<p class="fnote">One tile is one widget height. Change a single widget’s size by holding it and choosing Change widget size.</p></div>';
+    return h;
+  }
+
+  function secBg() {
+    var s = S(), c = resolvedColors(), h = '<h2>Background</h2><p class="st-sub">Behind all widgets.</p>';
+    h += '<div class="bgprev" id="bg-prev"><div class="slot"><span class="time">12:34</span></div></div>';
+    h += '<div class="st-card"><div class="sg" role="tablist">';
+    [['color', 'Color'], ['gradient', 'Gradient'], ['image', 'Image']].forEach(function (o) {
+      h += '<button type="button" role="tab" class="tab' + (s.bgType === o[0] ? ' on' : '') + '" aria-selected="' + (s.bgType === o[0] ? 'true' : 'false') + '" data-act="s-bgtype" data-id="' + o[0] + '">' + o[1] + '</button>';
+    });
+    h += '</div>';
+    if (s.bgType === 'color') {
+      h += colorRowHTML('b-', 'bg', 't', 'Background color', c.bg);
+    } else if (s.bgType === 'gradient') {
+      h += colorRowHTML('b-', 'bgC1', 'b', 'Start color', s.bgC1 || c.bg) + colorRowHTML('b-', 'bgC2', 'b', 'End color', s.bgC2 || mixHex(c.bg, c.run, 0.35)) + sliderHTML('bgAngle', 'Angle');
+    } else {
+      h += '<label class="btn" for="bg-file">' + (bgImage ? 'Choose another image' : 'Choose an image') + '</label><input class="vh" id="bg-file" type="file" accept="image/*">';
+      if (bgImage) h += '<button type="button" class="btn danger-btn" data-act="s-bg-clear">Remove image</button>' + sliderHTML('bgDim', 'Darken image');
+      h += '<p class="fnote">The image is shrunk and kept on this device only.</p>';
+    }
+    return h + '</div>';
+  }
+
+  function secAnim() {
+    var s = S(), h = '<h2>Animations</h2><p class="st-sub">How menus, sheets and widgets move.</p>';
+    h += '<div class="slot-wrap demo-wrap" id="demo-wrap"><div class="slot demo" role="button" tabindex="0" data-act="s-demo">Tap to preview</div>' +
+      '<div class="menu" role="menu"><button type="button" role="menuitem">Reset timer' + I_RESET + '</button><button type="button" role="menuitem" class="danger">Remove widget' + I_TRASH + '</button></div></div>';
+    h += '<div class="st-card"><div class="opts c2">';
+    ['none', 'smooth', 'snappy', 'bouncy'].forEach(function (k) {
+      h += '<button type="button" class="opt' + (s.anim === k ? ' on' : '') + '" data-act="s-anim" data-id="' + k + '" aria-pressed="' + (s.anim === k ? 'true' : 'false') + '"><b>' + ANIMS[k].name + '</b><small>' + ANIMS[k].desc + '</small></button>';
+    });
+    return h + '</div></div>';
+  }
+
+  function secAdd() {
+    var s = S(), h = '<h2>Add widget button</h2><p class="st-sub">Where to add new widgets from.</p>';
+    h += '<div class="st-card"><div class="opts">';
+    [['slot', 'Big box', '<i></i><i class="pl">+</i>'], ['corner', 'Corner', '<b>+</b><i></i>'], ['hidden', 'Hidden', '<i></i>']].forEach(function (o) {
+      h += '<button type="button" class="opt' + (s.addBtn === o[0] ? ' on' : '') + '" data-act="s-addbtn" data-id="' + o[0] + '" aria-pressed="' + (s.addBtn === o[0] ? 'true' : 'false') + '"><div class="mk">' + o[2] + '</div>' + o[1] + '</button>';
+    });
+    h += '</div><p class="fnote">' + (s.addBtn === 'hidden' ? 'With the button hidden, add widgets from here.' : 'You can always add widgets from here too.') + '</p>' +
+      '<button type="button" class="btn primary" data-act="s-addwidget">' + I_PLUS_SM + 'Add widget</button></div>';
+    return h;
+  }
+
+  var pendingImport = null;
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function secBackup() {
+    var h = '<h2>Backup</h2><p class="st-sub">Your workouts and settings are stored on this device only. Save a copy now and then, or use it to move to another device.</p>';
+    h += '<div class="st-card"><p class="bk-sum">' + plural(state.log.length, 'workout', 'workouts') + ', ' + plural(state.exercises.length, 'exercise', 'exercises') + ' saved here.</p>';
+    if (pendingImport) {
+      var o = pendingImport, st = o.state, when = '';
+      try { when = new Date(o.exportedAt).toLocaleDateString(loc()); } catch (er) {}
+      h += '<p class="bk-sum"><b>Backup ready to restore</b><br>' + plural(Array.isArray(st.log) ? st.log.length : 0, 'workout', 'workouts') + ', ' + plural(Array.isArray(st.exercises) ? st.exercises.length : 0, 'exercise', 'exercises') + (when && when !== 'Invalid Date' ? ', saved ' + esc(when) : '') + '.</p>' +
+        '<button type="button" class="btn danger-btn" data-act="s-bk-apply" data-confirm="1"><span class="lbl">Replace my data with this backup</span><span class="alt">Tap again to replace</span></button>' +
+        '<button type="button" class="btn" data-act="s-bk-cancel">Cancel</button>';
+    } else {
+      h += '<button type="button" class="btn primary" data-act="s-bk-save">Save backup file</button>' +
+        '<button type="button" class="btn" data-act="s-bk-copy">Copy backup as text</button>' +
+        '<label class="btn" for="bk-file">Restore from a file</label><input class="vh" id="bk-file" type="file" accept=".json,application/json">' +
+        '<textarea class="bk-text" id="bk-text" placeholder="Or paste backup text here" aria-label="Backup text" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>' +
+        '<button type="button" class="btn" data-act="s-bk-paste">Restore from pasted text</button>' +
+        '<p class="fnote">Restoring replaces everything on this device. If saving a file does not work in your browser, copy the text and keep it in a note.</p>';
+    }
+    return h + '</div>';
+  }
+
+  function secReset() {
+    return '<div class="st-card"><button type="button" class="btn danger-btn" data-act="s-reset" data-confirm="1"><span class="lbl">Reset appearance</span><span class="alt">Tap again to reset</span></button>' +
+      '<p class="fnote">Workouts and history are not touched.</p></div>';
+  }
+
+  function secLang() {
+    var h = '<h2>Language</h2><p class="st-sub">Language of the app.</p><div class="st-card"><div class="opts">';
+    [['en', 'English'], ['fi', 'Suomi'], ['sv', 'Svenska'], ['fr', 'Français']].forEach(function (o) {
+      h += '<button type="button" class="opt' + (S().lang === o[0] ? ' on' : '') + '" data-act="s-lang" data-id="' + o[0] + '" aria-pressed="' + (S().lang === o[0] ? 'true' : 'false') + '" lang="' + o[0] + '" translate="no">' + o[1] + '</button>';
+    });
+    return h + '</div></div>';
+  }
+
+  var SECS = { lang: secLang, font: secFont, colors: secColors, icons: secIcons, widgets: secWidgets, bg: secBg, anim: secAnim, add: secAdd, backup: secBackup, reset: secReset };
+  var SEC_ORDER = ['lang', 'font', 'colors', 'icons', 'widgets', 'bg', 'anim', 'add', 'backup', 'reset'];
+
+  var CATS = [['general', 'General', ['lang']], ['look', 'Appearance', ['font', 'colors', 'icons', 'bg']], ['widgets', 'Widgets', ['widgets', 'add']], ['motion', 'Motion', ['anim']], ['data', 'Data', ['backup', 'reset']]];
+  var stNav = document.getElementById('st-nav');
+  function renderSettings() {
+    var h = '', n = '';
+    CATS.forEach(function (c) {
+      h += '<div class="st-cat" id="sc-' + c[0] + '"><div class="st-cat-h" role="heading" aria-level="2">' + c[1] + '</div>';
+      c[2].forEach(function (id) { h += '<section class="st-sect" id="ss-' + id + '">' + SECS[id]() + '</section>'; });
+      h += '</div>';
+      n += '<button type="button" class="chip" data-cat="' + c[0] + '">' + c[1] + '</button>';
+    });
+    stBody.innerHTML = h;
+    stNav.innerHTML = n;
+    markCat();
+    paintBg(document.getElementById('bg-prev'));
+  }
+  function refresh(ids) {
+    disarm();
+    ids.forEach(function (id) {
+      var el = document.getElementById('ss-' + id);
+      if (el) el.innerHTML = SECS[id]();
+    });
+    var pv = document.getElementById('bg-prev');
+    if (pv) paintBg(pv);
+  }
+  function changed(ids) {
+    applyLook();
+    save();
+    if (ids) refresh(ids);
+  }
+
+  function markCat() {
+    var limit = document.querySelector('.st-top').getBoundingClientRect().bottom + 24, cur = CATS[0][0], on = null;
+    CATS.forEach(function (c) {
+      var el = document.getElementById('sc-' + c[0]);
+      if (el && el.getBoundingClientRect().top <= limit) cur = c[0];
+    });
+    if (page.scrollTop + page.clientHeight >= page.scrollHeight - 4) cur = CATS[CATS.length - 1][0];
+    [].forEach.call(stNav.children, function (b) {
+      var is = b.getAttribute('data-cat') === cur;
+      b.classList.toggle('on', is);
+      if (is) on = b;
+    });
+    if (on) {
+      var l = on.offsetLeft - 16, r = on.offsetLeft + on.offsetWidth + 16;
+      if (l < stNav.scrollLeft) stNav.scrollLeft = l;
+      else if (r > stNav.scrollLeft + stNav.clientWidth) stNav.scrollLeft = r - stNav.clientWidth;
+    }
+  }
+  page.addEventListener('scroll', markCat, { passive: true });
+  stNav.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-cat]');
+    if (!b) return;
+    var el = document.getElementById('sc-' + b.getAttribute('data-cat'));
+    if (!el) return;
+    var reduce = document.documentElement.getAttribute('data-anim') === 'none';
+    var top = page.scrollTop + el.getBoundingClientRect().top - document.querySelector('.st-top').getBoundingClientRect().bottom - 6;
+    page.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' });
+  });
+
+  function openSettings() {
+    closeMenu(); closeSheet();
+    renderSettings();
+    page.classList.add('show');
+    page.setAttribute('aria-hidden', 'false');
+    page.scrollTop = 0;
+    var d = page.querySelector('[data-act="s-close"]');
+    if (d) d.focus({ preventScroll: true });
+  }
+  function closeSettings() {
+    if (!page.classList.contains('show')) return;
+    page.classList.remove('show');
+    page.setAttribute('aria-hidden', 'true');
+    if (document.activeElement && page.contains(document.activeElement)) document.activeElement.blur();
+  }
+  page.querySelector('.st-top [data-act="s-close"]').addEventListener('click', closeSettings);
+  hdrGear.addEventListener('click', openSettings);
+  hdrAdd.addEventListener('click', openSheet);
+
+  /* ----- settings events ----- */
+  function setColor(kind, key, hex) {
+    if (kind === 'b') S()[key] = hex; else S().colors[key] = hex;
+  }
+  function syncColorInputs(key, hex) {
+    Array.prototype.forEach.call(stBody.querySelectorAll('[data-c="' + key + '"]'), function (i) { if (i.value !== hex) i.value = hex; });
+    Array.prototype.forEach.call(stBody.querySelectorAll('[data-ch="' + key + '"]'), function (i) { if (document.activeElement !== i) i.value = hex.toUpperCase(); });
+  }
+
+  stBody.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]');
+    if (armedBtn && armedBtn !== b) disarm();
+    if (!b) return;
+    var act = b.getAttribute('data-act'), id = b.getAttribute('data-id'), s = S();
+    if (b.hasAttribute('data-confirm') && !confirmTap(b)) return;
+
+    if (act === 's-close') {
+      closeSettings();
+    } else if (act === 's-font') {
+      s.font = id;
+      changed(['font']);
+    } else if (act === 's-rm-font') {
+      var cur = fontById(s.font);
+      customFonts = customFonts.filter(function (f) { return f.id !== cur.id; });
+      saveFonts();
+      s.font = 'outfit';
+      changed(['font']);
+    } else if (act === 's-theme') {
+      s.theme = id;
+      s.colors = {};
+      s.bgC1 = ''; s.bgC2 = '';
+      changed(['colors', 'widgets', 'bg']);
+      render();
+    } else if (act === 's-reset-colors') {
+      s.colors = {};
+      changed(['colors', 'widgets', 'bg']);
+      render();
+    } else if (act === 's-icon') {
+      s.addIcon = id;
+      changed(['icons', 'widgets']);
+      render();
+    } else if (act === 's-cap') {
+      s.iconCap = id;
+      changed(['icons']);
+    } else if (act === 's-bgtype') {
+      s.bgType = id;
+      changed(['bg']);
+    } else if (act === 's-bg-clear') {
+      bgImage = '';
+      try { localStorage.removeItem(BKEY); } catch (er) {}
+      changed(['bg']);
+    } else if (act === 's-anim') {
+      s.anim = id;
+      changed(['anim']);
+    } else if (act === 's-demo') {
+      var wrap = document.getElementById('demo-wrap'), open = !wrap.classList.contains('open');
+      wrap.classList.toggle('open', open);
+      b.classList.toggle('lifted', open);
+      wrap.querySelector('.menu').classList.toggle('show', open);
+    } else if (act === 's-lang') {
+      s.lang = id;
+      setLang(id);
+      changed(['lang']);
+      render();
+    } else if (act === 's-addbtn') {
+      s.addBtn = id;
+      changed(['add', 'widgets']);
+      render();
+    } else if (act === 's-addwidget') {
+      closeSettings();
+      openSheet();
+    } else if (act === 's-bk-save') {
+      saveBackupFile();
+    } else if (act === 's-bk-copy') {
+      copyBackup();
+    } else if (act === 's-bk-paste') {
+      var ta = document.getElementById('bk-text'), parsed = parseBackup(ta ? ta.value : '');
+      if (!parsed) { toast('That is not a customized-trainer backup'); return; }
+      pendingImport = parsed;
+      refresh(['backup']);
+    } else if (act === 's-bk-cancel') {
+      pendingImport = null;
+      refresh(['backup']);
+    } else if (act === 's-bk-apply') {
+      applyBackup();
+    } else if (act === 's-reset') {
+      state.settings = cleanSettings(null);
+      bgImage = '';
+      try { localStorage.removeItem(BKEY); } catch (er) {}
+      applyLook();
+      save();
+      renderSettings();
+      render();
+      toast('Appearance reset');
+    }
+  });
+
+  stBody.addEventListener('keydown', function (e) {
+    var d = e.target.closest('[data-act="s-demo"]');
+    if (d && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); d.click(); }
+    if (e.key === 'Enter' && e.target.matches('.chex')) { e.preventDefault(); e.target.blur(); }
+  });
+
+  stBody.addEventListener('input', function (e) {
+    var t = e.target, s = S();
+    if (t.hasAttribute('data-sl')) {
+      var key = t.getAttribute('data-sl');
+      s[key] = clampNum(t.value, SL[key].min, SL[key].max, DEFAULTS[key]);
+      var out = document.getElementById('o-' + key);
+      if (out) out.textContent = s[key] + SL[key].u;
+      applyLook();
+      saveSoon();
+      if (key.indexOf('max') === 0) render();
+    } else if (t.hasAttribute('data-c')) {
+      var hex = normHex(t.value);
+      if (!hex) return;
+      setColor(t.getAttribute('data-k'), t.getAttribute('data-c'), hex);
+      syncColorInputs(t.getAttribute('data-c'), hex);
+      applyLook();
+      saveSoon();
+    } else if (t.hasAttribute('data-ch')) {
+      var hx = normHex(t.value);
+      if (!hx) return;
+      setColor(t.getAttribute('data-k'), t.getAttribute('data-ch'), hx);
+      syncColorInputs(t.getAttribute('data-ch'), hx);
+      applyLook();
+      saveSoon();
+    }
+  });
+
+  stBody.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.hasAttribute('data-ch')) {
+      var key = t.getAttribute('data-ch'), cur = resolvedColors();
+      var hex = normHex(t.value) || (t.getAttribute('data-k') === 'b' ? (S()[key] || cur.bg) : cur[key]);
+      t.value = hex.toUpperCase();
+    }
+    if (t.hasAttribute('data-c') || t.hasAttribute('data-ch')) { save(); refresh(['colors', 'widgets', 'bg'].filter(function (id) { return !stBody.querySelector('#ss-' + id).contains(t); })); }
+    else if (t.hasAttribute('data-sl')) save();
+    else if (t.id === 'ff-file') onFontFile(t);
+    else if (t.id === 'bg-file') onBgFile(t);
+    else if (t.id === 'bk-file') onBackupFile(t);
+  });
+
+  stBody.addEventListener('submit', function (e) {
+    if (e.target.id !== 'gf-form') return;
+    e.preventDefault();
+    var inp = document.getElementById('gf-name'), name = inp.value.trim().replace(/\s+/g, ' ');
+    if (!/^[A-Za-z0-9 ]{2,40}$/.test(name)) { toast('Use the exact Google Fonts name'); return; }
+    var dup = allFonts().filter(function (f) { return f.label.toLowerCase() === name.toLowerCase(); })[0];
+    if (dup) { S().font = dup.id; changed(['font']); return; }
+    toast('Loading ' + name + '…');
+    loadGoogle(name, encodeURIComponent(name).replace(/%20/g, '+') + ':wght@400;500;600', function (ok) {
+      if (!ok) { toast('Google Fonts has no font called “' + name + '”'); return; }
+      var f = { id: uid().replace(/[^a-z0-9]/gi, ''), label: name, kind: 'google', data: '' };
+      customFonts.push(f);
+      saveFonts();
+      S().font = f.id;
+      changed(['font']);
+    });
+  });
+
+  function onFontFile(inp) {
+    var file = inp.files && inp.files[0];
+    inp.value = '';
+    if (!file) return;
+    if (file.size > 1.5 * 1024 * 1024) { toast('That font file is over 1.5 MB'); return; }
+    var label = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9 _-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40) || 'Custom font';
+    var n = 2, base = label;
+    while (allFonts().some(function (f) { return f.label.toLowerCase() === label.toLowerCase(); })) label = base + ' ' + (n++);
+    var fr = new FileReader();
+    fr.onerror = function () { toast('Could not read that file'); };
+    fr.onload = function () {
+      var f = { id: uid().replace(/[^a-z0-9]/gi, ''), label: label, kind: 'file', data: String(fr.result) };
+      registerFileFont(f, function (ok) {
+        if (!ok) { toast('That file is not a usable font'); return; }
+        customFonts.push(f);
+        if (!saveFonts()) { customFonts.pop(); toast('Not enough storage for that font'); return; }
+        S().font = f.id;
+        changed(['font']);
+      });
+    };
+    fr.readAsDataURL(file);
+  }
+
+  function onBgFile(inp) {
+    var file = inp.files && inp.files[0];
+    inp.value = '';
+    if (!file) return;
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var sc = Math.min(1, 1280 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.width * sc));
+      cv.height = Math.max(1, Math.round(img.height * sc));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      var data = cv.toDataURL('image/jpeg', 0.8);
+      try { localStorage.setItem(BKEY, data); } catch (er) { toast('Not enough storage for that image'); return; }
+      bgImage = data;
+      S().bgType = 'image';
+      changed(['bg']);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); toast('Could not open that image'); };
+    img.src = url;
+  }
+
+  /* ----- resize mode: drag the handle to stretch a widget in whole tiles ----- */
+  var rz = null;
+  var rzTop = document.getElementById('rz-top');
+  rzTop.addEventListener('click', function () { if (editing) endEdit(); else endResize(); });
+  function startResize(id) {
+    endResize();
+    var wrap = wrapOf(id), w = find(id);
+    if (!wrap || !w) return;
+    resizeId = id;
+    wrap.classList.add('resizing');
+    wrap.insertAdjacentHTML('beforeend', '<div class="rz" role="separator" aria-label="Drag to resize"></div>');
+    scrim.classList.add('show');
+    rzTop.hidden = false;
+    rzTop.focus({ preventScroll: true });
+  }
+  function endResize() {
+    if (!resizeId) return;
+    var wrap = wrapOf(resizeId);
+    resizeId = null;
+    rz = null;
+    rzTop.hidden = true;
+    if (wrap) {
+      wrap.classList.remove('resizing');
+      Array.prototype.forEach.call(wrap.querySelectorAll('.rz, .rz-done'), function (n) { n.parentNode.removeChild(n); });
+    }
+    save();
+    if (!menuId && !sheetOpen) scrim.classList.remove('show');
+  }
+  list.addEventListener('pointerdown', function (e) {
+    var g = e.target.closest('.rz');
+    if (!g) return;
+    var wrap = g.closest('.slot-wrap'), w = wrap && find(wrap.getAttribute('data-id'));
+    if (!w) return;
+    e.preventDefault();
+    var card = wrap.querySelector('.slot, .wk-card');
+    rz = { w: w, wrap: wrap, y: e.clientY, h: card.getBoundingClientRect().height, pid: e.pointerId };
+    try { g.setPointerCapture(e.pointerId); } catch (er) {}
+  });
+  list.addEventListener('pointermove', function (e) {
+    if (!rz || e.pointerId !== rz.pid) return;
+    var s = S(), unit = s.slotH + s.gap;
+    var t = Math.round((rz.h + (e.clientY - rz.y) + s.gap) / unit);
+    t = Math.max(1, Math.min(maxTiles(rz.w), t));
+    if (t !== tilesOf(rz.w)) {
+      rz.w.tiles = t;
+      rz.wrap.style.setProperty('--n', t);
+      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (er) {} }
+    }
+  });
+  function rzUp(e) {
+    if (!rz || e.pointerId !== rz.pid) return;
+    rz = null;
+    save();
+  }
+  list.addEventListener('pointerup', rzUp);
+  list.addEventListener('pointercancel', rzUp);
+
+  /* ----- exercise library widget ----- */
+  function refreshExerciseViews(skipLib) {
+    state.widgets.forEach(function (w) {
+      if (w.type === 'library') { if (!skipLib) rerender(w.id); }
+      else if (w.type === 'history') rerender(w.id);
+      else if (w.type === 'workout' && w.active) rerender(w.id);
+    });
+  }
+  list.addEventListener('change', function (e) {
+    var inp = e.target.closest('input[data-lib-ren]');
+    if (!inp) return;
+    var id = inp.getAttribute('data-lib-ren'), ex = null;
+    state.exercises.forEach(function (x) { if (x.id === id) ex = x; });
+    if (!ex) return;
+    var name = inp.value.trim().slice(0, 40), low = name.toLowerCase();
+    var dup = state.exercises.some(function (x) { return x.id !== id && x.name.toLowerCase() === low; });
+    if (!name || dup) {
+      inp.value = ex.name;
+      toast(dup ? 'An exercise with that name already exists' : 'Name can’t be empty');
+      return;
+    }
+    if (ex.name === name) { inp.value = name; return; }
+    ex.name = name;
+    inp.value = name;
+    save();
+    refreshExerciseViews(true);
+  });
+  list.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.matches('input[data-lib-ren]')) { e.preventDefault(); e.target.blur(); }
+  });
+  list.addEventListener('submit', function (e) {
+    var f = e.target.closest('form[data-lib-form]');
+    if (!f) return;
+    e.preventDefault();
+    var inp = f.querySelector('[data-lib-new]'), name = inp.value.trim().slice(0, 40);
+    if (!name) return;
+    var low = name.toLowerCase();
+    if (state.exercises.some(function (x) { return x.name.toLowerCase() === low; })) { toast('That exercise already exists'); return; }
+    var wid = f.closest('.slot-wrap').getAttribute('data-id');
+    createExercise(name);
+    var again = wrapOf(wid) && wrapOf(wid).querySelector('[data-lib-new]');
+    if (again) again.focus({ preventScroll: true });
+  });
+
+  /* ----- layout edit mode: move, resize and remove widgets ----- */
+  var editing = false, drag = null, dragPending = null, dragTimer = null;
+  function editWraps() { return Array.prototype.slice.call(list.querySelectorAll('.slot-wrap[data-id]')); }
+  function decorateWrap(wrap) {
+    if (!wrap || !wrap.getAttribute('data-id')) return;
+    var id = wrap.getAttribute('data-id');
+    wrap.classList.add('jig');
+    wrap.style.setProperty('--jd', (-(editWraps().indexOf(wrap) % 4) * 0.07) + 's');
+    if (!wrap.querySelector('.ed-x')) {
+      wrap.insertAdjacentHTML('beforeend', '<button type="button" class="ed-x" data-act="ed-x" data-confirm="1" data-w="' + id + '" aria-label="Remove widget"><span class="xi">' + I_X + '</span><span class="xt">Remove</span></button><div class="rz" role="separator" aria-label="Drag to resize"></div>');
+    }
+  }
+  function enterEdit() {
+    if (editing) return;
+    closeMenu(); closeSheet(); endResize();
+    editing = true;
+    rootEl.classList.add('editing');
+    editWraps().forEach(decorateWrap);
+    rzTop.hidden = false;
+    rzTop.focus({ preventScroll: true });
+    hint.textContent = 'Hold and drag a widget to move it. Drag the bar to resize, tap × to remove.';
+  }
+  function endEdit() {
+    if (!editing) return;
+    editing = false;
+    cancelDrag();
+    rootEl.classList.remove('editing');
+    rzTop.hidden = true;
+    save();
+    render();
+  }
+  function persistOrder() {
+    var ids = editWraps().map(function (x) { return x.getAttribute('data-id'); });
+    state.widgets.sort(function (a, b) { return ids.indexOf(a.id) - ids.indexOf(b.id); });
+    save();
+  }
+  function cancelDrag() {
+    clearTimeout(dragTimer);
+    dragPending = null;
+    if (drag) {
+      clearInterval(drag.timer);
+      drag.wrap.classList.remove('dragging');
+      drag.wrap.style.transform = '';
+      drag = null;
+    }
+  }
+  function startDrag() {
+    var d = dragPending;
+    if (!d || !editing) return;
+    dragPending = null;
+    var r = d.wrap.getBoundingClientRect();
+    drag = { wrap: d.wrap, pid: d.pid, grab: d.y - r.top, dy: 0, y: d.y, timer: null };
+    d.wrap.classList.add('dragging');
+    try { d.wrap.setPointerCapture(d.pid); } catch (er) {}
+    if (navigator.vibrate) { try { navigator.vibrate(10); } catch (er) {} }
+    drag.timer = setInterval(function () {
+      if (!drag) return;
+      if (drag.y < 70) { window.scrollBy(0, -10); moveDrag(); }
+      else if (drag.y > window.innerHeight - 70) { window.scrollBy(0, 10); moveDrag(); }
+    }, 16);
+  }
+  function placeDrag() {
+    var w = drag.wrap, r = w.getBoundingClientRect();
+    drag.dy = (drag.y - drag.grab) - (r.top - drag.dy);
+    w.style.transform = 'translateY(' + drag.dy + 'px)';
+  }
+  function flipMove(sib, mutate) {
+    var t0 = sib.getBoundingClientRect().top;
+    mutate();
+    var delta = t0 - sib.getBoundingClientRect().top;
+    if (!delta) return;
+    sib.style.transition = 'none';
+    sib.style.transform = 'translateY(' + delta + 'px)';
+    sib.getBoundingClientRect();
+    sib.style.transition = 'transform var(--dur) var(--ease)';
+    sib.style.transform = '';
+    setTimeout(function () { sib.style.transition = ''; }, 450);
+  }
+  function moveDrag() {
+    if (!drag) return;
+    var w = drag.wrap;
+    placeDrag();
+    var r = w.getBoundingClientRect(), mid = r.top + r.height / 2;
+    var prev = w.previousElementSibling, next = w.nextElementSibling;
+    if (prev && prev.hasAttribute('data-id')) {
+      var pr = prev.getBoundingClientRect();
+      if (mid < pr.top + pr.height / 2) { flipMove(prev, function () { list.insertBefore(w, prev); }); placeDrag(); return; }
+    }
+    if (next && next.hasAttribute('data-id')) {
+      var nr = next.getBoundingClientRect();
+      if (mid > nr.top + nr.height / 2) { flipMove(next, function () { list.insertBefore(w, next.nextSibling); }); placeDrag(); }
+    }
+  }
+  list.addEventListener('pointerdown', function (e) {
+    if (!editing) return;
+    var wrap = e.target.closest('.slot-wrap[data-id]');
+    if (!wrap || e.target.closest('.ed-x, .rz')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    dragPending = { wrap: wrap, pid: e.pointerId, x: e.clientX, y: e.clientY };
+    if (e.pointerType === 'mouse') startDrag();
+    else dragTimer = setTimeout(startDrag, 180);
+  });
+  list.addEventListener('pointermove', function (e) {
+    if (dragPending && e.pointerId === dragPending.pid && Math.hypot(e.clientX - dragPending.x, e.clientY - dragPending.y) > 10) {
+      clearTimeout(dragTimer);
+      dragPending = null;
+    }
+    if (drag && e.pointerId === drag.pid) { drag.y = e.clientY; moveDrag(); }
+  });
+  function dragUp(e) {
+    if (dragPending && e.pointerId === dragPending.pid) { clearTimeout(dragTimer); dragPending = null; }
+    if (!drag || e.pointerId !== drag.pid) return;
+    var w = drag.wrap;
+    clearInterval(drag.timer);
+    drag = null;
+    w.classList.remove('dragging');
+    w.style.transition = 'transform var(--dur) var(--ease)';
+    w.style.transform = '';
+    setTimeout(function () { w.style.transition = ''; }, 450);
+    persistOrder();
+  }
+  list.addEventListener('pointerup', dragUp);
+  list.addEventListener('pointercancel', dragUp);
+  document.addEventListener('touchmove', function (e) { if (drag) e.preventDefault(); }, { passive: false });
+
+  /* ----- per-widget settings page ----- */
+  var wsPage = document.getElementById('wsettings');
+  var wsBody = document.getElementById('ws-body');
+  var wsId = null;
+
+  function wsSlider(key, label, min, max, step, unit, val) {
+    return '<div class="sl"><div class="sl-top"><label for="ws-' + key + '">' + label + '</label><output id="wo-' + key + '">' + val + unit + '</output></div>' +
+      '<input id="ws-' + key + '" type="range" data-ws="' + key + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '"></div>';
+  }
+  function wsPreviewHTML(w) {
+    var inner, wrapAttr = wrapStyleStr(w);
+    if (w.type === 'timer') {
+      inner = '<div class="slot">' + (w.title ? '<span class="wlabel">' + esc(w.title) + '</span>' : '') + '<span class="time">12:34</span></div>';
+    } else if (w.type === 'workout') {
+      inner = '<div class="wk-card">' + sampleSetsHTML(w.title || 'Workout') + '</div>';
+    } else if (w.type === 'library') {
+      inner = '<div class="wk-card"><div class="wk-top"><div class="wk-head"><span class="wk-title">' + esc(w.title || 'Exercises') + '</span></div><span class="wk-more">' + I_DOTS + '</span></div>' +
+        '<div class="lib-list"><div class="ex-row edit"><span class="ex-name" style="display:flex;align-items:center">Barbell Bench Press</span><span>12 sessions</span></div><div class="ex-row edit"><span class="ex-name" style="display:flex;align-items:center">Squat</span><span>8 sessions</span></div></div></div>';
+    } else {
+      inner = '<div class="wk-card"><div class="wk-top"><div class="wk-head"><span class="wk-title">' + esc(w.title || 'History') + '</span></div><span class="wk-more">' + I_DOTS + '</span></div>' +
+        '<div class="tabs"><span class="tab on" style="display:grid;place-items:center">Workouts</span><span class="tab" style="display:grid;place-items:center">Exercises</span></div>' +
+        '<div class="hlist"><div class="hrow"><div class="hhead"><span class="hmain"><b>Mon 26 Oct</b><span>3 exercises · 9 sets</span></span><span class="hdur">52 min</span></div></div>' +
+        '<div class="hrow"><div class="hhead"><span class="hmain"><b>Fri 23 Oct</b><span>4 exercises · 12 sets</span></span><span class="hdur">61 min</span></div></div></div></div>';
+    }
+    return '<div class="slot-wrap" id="ws-pw"' + (wrapAttr ? ' style="' + wrapAttr + '"' : '') + '>' + inner + '</div>';
+  }
+  function wsBodyHTML(w) {
+    var s = S(), lk = w.look || {}, c = resolvedColors(), idle = w.type === 'workout' && !w.active;
+    var kind = w.type === 'timer' ? 'Timer' : w.type === 'workout' ? 'Workout' : w.type === 'library' ? 'Exercises' : 'History';
+    var h = '<section class="st-sect"><h2>' + kind + '</h2><p class="st-sub">These settings only change this widget.</p><div class="pv"><div class="pv-box" id="ws-prev">' + wsPreviewHTML(w) + '</div></div></section>';
+    h += '<section class="st-sect"><h2>General</h2><div class="st-card"><div class="irow"><span>Title</span>' +
+      '<input class="ex-input" id="ws-title" type="text" maxlength="24" value="' + esc(w.title || '') + '" placeholder="' + (w.type === 'timer' ? 'No title' : kind) + '" autocapitalize="sentences" autocorrect="off" aria-label="Widget title"></div>';
+    h += wsSlider('tiles', 'Size', 1, maxTiles(w), 1, ' tiles', tilesOf(w)) + '<p class="fnote">The largest size is set under Settings, Widgets.</p>';
+    h += '</div></section>';
+    h += '<section class="st-sect"><h2>Look</h2><div class="st-card">' +
+      colorRowHTML('wk-', 'line', 't', 'Border color', lk.line || c.line) + colorRowHTML('wk-', 'surface', 't', 'Widget color', lk.surface || c.surface) +
+      wsSlider('borderW', 'Border thickness', SL.borderW.min, SL.borderW.max, SL.borderW.step, 'px', lk.borderW != null ? lk.borderW : s.borderW) +
+      wsSlider('radius', 'Corner radius', SL.radius.min, SL.radius.max, SL.radius.step, 'px', lk.radius != null ? lk.radius : s.radius) +
+      wsSlider('cardOp', 'Widget opacity', SL.cardOp.min, SL.cardOp.max, SL.cardOp.step, '%', lk.cardOp != null ? lk.cardOp : s.cardOp) +
+      '<button type="button" class="btn" data-act="ws-reset-look">Use global look</button></div></section>';
+    return h;
+  }
+  function wsApply(w) {
+    var wrap = wrapOf(w.id), str = wrapStyleStr(w);
+    if (wrap) { if (str) wrap.setAttribute('style', str); else wrap.removeAttribute('style'); }
+    var pv = document.getElementById('ws-prev');
+    if (pv) pv.innerHTML = wsPreviewHTML(w);
+  }
+  function openWidgetSettings(id) {
+    var w = find(id);
+    if (!w) return;
+    closeMenu(); endResize();
+    wsId = id;
+    wsBody.innerHTML = wsBodyHTML(w);
+    wsPage.classList.add('show');
+    wsPage.setAttribute('aria-hidden', 'false');
+    wsPage.scrollTop = 0;
+    var d = wsPage.querySelector('[data-act="ws-close"]');
+    if (d) d.focus({ preventScroll: true });
+  }
+  function closeWSettings() {
+    if (!wsPage.classList.contains('show')) return;
+    wsPage.classList.remove('show');
+    wsPage.setAttribute('aria-hidden', 'true');
+    if (document.activeElement && wsPage.contains(document.activeElement)) document.activeElement.blur();
+    var w = find(wsId);
+    wsId = null;
+    save();
+    if (w) rerender(w.id);
+  }
+  wsPage.querySelector('.st-top [data-act="ws-close"]').addEventListener('click', closeWSettings);
+
+  wsBody.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act="ws-reset-look"]');
+    var w = find(wsId);
+    if (!b || !w) return;
+    w.look = {};
+    wsBody.innerHTML = wsBodyHTML(w);
+    wsApply(w);
+    save();
+  });
+  function wsSyncColor(key, hex) {
+    Array.prototype.forEach.call(wsBody.querySelectorAll('[data-c="' + key + '"]'), function (i) { if (i.value !== hex) i.value = hex; });
+    Array.prototype.forEach.call(wsBody.querySelectorAll('[data-ch="' + key + '"]'), function (i) { if (document.activeElement !== i) i.value = hex.toUpperCase(); });
+  }
+  wsBody.addEventListener('input', function (e) {
+    var w = find(wsId), t = e.target;
+    if (!w) return;
+    if (t.id === 'ws-title') {
+      w.title = t.value.slice(0, 24);
+      wsApply(w);
+      saveSoon();
+    } else if (t.hasAttribute('data-ws')) {
+      var key = t.getAttribute('data-ws'), v = parseFloat(t.value);
+      if (!isFinite(v)) return;
+      if (key === 'tiles') { w.tiles = Math.round(v); } else { w.look = w.look || {}; w.look[key] = v; }
+      var out = document.getElementById('wo-' + key);
+      if (out) out.textContent = v + (key === 'tiles' ? ' tiles' : key === 'cardOp' ? '%' : 'px');
+      wsApply(w);
+      saveSoon();
+    } else if (t.hasAttribute('data-c') || t.hasAttribute('data-ch')) {
+      var ck = t.getAttribute('data-c') || t.getAttribute('data-ch'), hex = normHex(t.value);
+      if (!hex) return;
+      w.look = w.look || {};
+      w.look[ck] = hex;
+      wsSyncColor(ck, hex);
+      wsApply(w);
+      saveSoon();
+    }
+  });
+  wsBody.addEventListener('change', function (e) {
+    var t = e.target, w = find(wsId);
+    if (w && t.hasAttribute('data-ch')) {
+      var k = t.getAttribute('data-ch');
+      t.value = ((w.look && w.look[k]) || resolvedColors()[k]).toUpperCase();
+    }
+    save();
+  });
+  wsBody.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.target.matches('.chex') || e.target.id === 'ws-title')) { e.preventDefault(); e.target.blur(); }
+  });
+
+  /* ----- backup: save, copy and restore all data ----- */
+  function buildBackup() {
+    return JSON.stringify({ app: 'customized-trainer', version: 1, exportedAt: new Date().toISOString(), state: state, fonts: customFonts, bg: bgImage });
+  }
+  function backupName() {
+    var d = new Date();
+    return 'customized-trainer-backup-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
+  }
+  function downloadText(text, name) {
+    var url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.parentNode.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    toast('Backup file created');
+  }
+  function saveBackupFile() {
+    var text = buildBackup(), name = backupName(), file = null;
+    try { file = new File([text], name, { type: 'application/json' }); } catch (er) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'customized-trainer backup' }).catch(function (e) {
+        if (!e || e.name !== 'AbortError') downloadText(text, name);
+      });
+      return;
+    }
+    downloadText(text, name);
+  }
+  function copyBackup() {
+    var text = buildBackup();
+    function fallback() {
+      var ta = document.getElementById('bk-text');
+      if (ta) { ta.value = text; ta.focus(); ta.select(); }
+      toast('Copy blocked. The text is in the box below, select and copy it.');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('Backup copied'); }, fallback);
+    } else fallback();
+  }
+  function parseBackup(text) {
+    var o;
+    try { o = JSON.parse(String(text || '').trim()); } catch (er) { return null; }
+    if (!o || (o.app !== 'customized-trainer' && o.app !== 'blank-slate') || !o.state || typeof o.state !== 'object' || !Array.isArray(o.state.widgets)) return null;
+    return o;
+  }
+  function onBackupFile(inp) {
+    var file = inp.files && inp.files[0];
+    inp.value = '';
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) { toast('That file is too large to be a backup'); return; }
+    var fr = new FileReader();
+    fr.onerror = function () { toast('Could not read that file'); };
+    fr.onload = function () {
+      var o = parseBackup(fr.result);
+      if (!o) { toast('That is not a customized-trainer backup'); return; }
+      pendingImport = o;
+      refresh(['backup']);
+    };
+    fr.readAsText(file);
+  }
+  function applyBackup() {
+    var o = pendingImport;
+    if (!o) return;
+    clearTimeout(saveTimer);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(o.state));
+      if (Array.isArray(o.fonts)) localStorage.setItem(FKEY, JSON.stringify(o.fonts)); else localStorage.removeItem(FKEY);
+      if (typeof o.bg === 'string' && o.bg.indexOf('data:image/') === 0) localStorage.setItem(BKEY, o.bg); else localStorage.removeItem(BKEY);
+    } catch (er) { toast('Not enough storage to restore this backup'); return; }
+    pendingImport = null;
+    location.reload();
+  }
+
+  /* ---------- languages ---------- */
+  var DICT = {"Settings": {"fi": "Asetukset", "sv": "Inställningar", "fr": "Réglages"}, "Widget settings": {"fi": "Widgetin asetukset", "sv": "Widgetinställningar", "fr": "Réglages du widget"}, "Widgets": {"fi": "Widgetit", "sv": "Widgetar", "fr": "Widgets"}, "Add widget": {"fi": "Lisää widget", "sv": "Lägg till widget", "fr": "Ajouter un widget"}, "Add widget button": {"fi": "Lisää widget -painike", "sv": "Knapp för att lägga till widget", "fr": "Bouton d’ajout de widget"}, "Add widget icon": {"fi": "Lisää widget -kuvake", "sv": "Ikon för lägg till widget", "fr": "Icône d’ajout de widget"}, "Language": {"fi": "Kieli", "sv": "Språk", "fr": "Langue"}, "Language of the app.": {"fi": "Sovelluksen kieli.", "sv": "Appens språk.", "fr": "Langue de l’application."}, "Font": {"fi": "Fontti", "sv": "Teckensnitt", "fr": "Police"}, "Colors": {"fi": "Värit", "sv": "Färger", "fr": "Couleurs"}, "Icons": {"fi": "Kuvakkeet", "sv": "Ikoner", "fr": "Icônes"}, "Background": {"fi": "Tausta", "sv": "Bakgrund", "fr": "Arrière-plan"}, "Animations": {"fi": "Animaatiot", "sv": "Animationer", "fr": "Animations"}, "Backup": {"fi": "Varmuuskopio", "sv": "Säkerhetskopia", "fr": "Sauvegarde"}, "Done": {"fi": "Valmis", "sv": "Klar", "fr": "Terminé"}, "Close": {"fi": "Sulje", "sv": "Stäng", "fr": "Fermer"}, "Cancel": {"fi": "Peruuta", "sv": "Avbryt", "fr": "Annuler"}, "Delete": {"fi": "Poista", "sv": "Ta bort", "fr": "Supprimer"}, "Edit": {"fi": "Muokkaa", "sv": "Redigera", "fr": "Modifier"}, "Add": {"fi": "Lisää", "sv": "Lägg till", "fr": "Ajouter"}, "Remove": {"fi": "Poista", "sv": "Ta bort", "fr": "Retirer"}, "Menu": {"fi": "Valikko", "sv": "Meny", "fr": "Menu"}, "Widget menu": {"fi": "Widgetin valikko", "sv": "Widgetmeny", "fr": "Menu du widget"}, "Timer": {"fi": "Ajastin", "sv": "Timer", "fr": "Minuteur"}, "Workout": {"fi": "Treeni", "sv": "Träningspass", "fr": "Entraînement"}, "Workouts": {"fi": "Treenit", "sv": "Träningspass", "fr": "Entraînements"}, "History": {"fi": "Historia", "sv": "Historik", "fr": "Historique"}, "Exercises": {"fi": "Liikkeet", "sv": "Övningar", "fr": "Exercices"}, "Exercise library": {"fi": "Liikekirjasto", "sv": "Övningsbibliotek", "fr": "Bibliothèque d’exercices"}, "Exercise name": {"fi": "Liikkeen nimi", "sv": "Övningens namn", "fr": "Nom de l’exercice"}, "Rename exercise": {"fi": "Nimeä liike uudelleen", "sv": "Byt namn på övning", "fr": "Renommer l’exercice"}, "Remove exercise": {"fi": "Poista liike", "sv": "Ta bort övning", "fr": "Retirer l’exercice"}, "New exercise": {"fi": "Uusi liike", "sv": "Ny övning", "fr": "Nouvel exercice"}, "New exercise name": {"fi": "Uuden liikkeen nimi", "sv": "Nytt övningsnamn", "fr": "Nom du nouvel exercice"}, "Search or create exercise": {"fi": "Hae tai luo liike", "sv": "Sök eller skapa övning", "fr": "Rechercher ou créer un exercice"}, "Add exercise": {"fi": "Lisää liike", "sv": "Lägg till övning", "fr": "Ajouter un exercice"}, "Add set": {"fi": "Lisää sarja", "sv": "Lägg till set", "fr": "Ajouter une série"}, "Start workout": {"fi": "Aloita treeni", "sv": "Starta träningspass", "fr": "Démarrer l’entraînement"}, "Finish workout": {"fi": "Lopeta treeni", "sv": "Avsluta träningspass", "fr": "Terminer l’entraînement"}, "Discard workout": {"fi": "Hylkää treeni", "sv": "Kasta träningspass", "fr": "Abandonner l’entraînement"}, "Delete workout": {"fi": "Poista treeni", "sv": "Ta bort träningspass", "fr": "Supprimer l’entraînement"}, "Reset timer": {"fi": "Nollaa ajastin", "sv": "Nollställ timern", "fr": "Réinitialiser le minuteur"}, "Remove widget": {"fi": "Poista widget", "sv": "Ta bort widget", "fr": "Supprimer le widget"}, "Change widget size": {"fi": "Muuta widgetin kokoa", "sv": "Ändra widgetstorlek", "fr": "Changer la taille du widget"}, "Edit layout": {"fi": "Muokkaa asettelua", "sv": "Redigera layout", "fr": "Modifier la disposition"}, "Edit widget settings": {"fi": "Muokkaa widgetin asetuksia", "sv": "Redigera widgetinställningar", "fr": "Modifier les réglages du widget"}, "Tap again": {"fi": "Napauta uudelleen", "sv": "Tryck igen", "fr": "Appuyez à nouveau"}, "Tap again to delete": {"fi": "Napauta uudelleen poistaaksesi", "sv": "Tryck igen för att ta bort", "fr": "Appuyez à nouveau pour supprimer"}, "Tap again to remove": {"fi": "Napauta uudelleen poistaaksesi", "sv": "Tryck igen för att ta bort", "fr": "Appuyez à nouveau pour retirer"}, "Tap again to replace": {"fi": "Napauta uudelleen korvataksesi", "sv": "Tryck igen för att ersätta", "fr": "Appuyez à nouveau pour remplacer"}, "Tap again to reset": {"fi": "Napauta uudelleen nollataksesi", "sv": "Tryck igen för att återställa", "fr": "Appuyez à nouveau pour réinitialiser"}, "Tap to preview": {"fi": "Napauta esikatselua varten", "sv": "Tryck för förhandsvisning", "fr": "Touchez pour prévisualiser"}, "Tap to start and stop.": {"fi": "Käynnistä ja pysäytä napauttamalla.", "sv": "Tryck för att starta och stoppa.", "fr": "Touchez pour démarrer et arrêter."}, "Timer. Tap to start or stop.": {"fi": "Ajastin. Käynnistä tai pysäytä napauttamalla.", "sv": "Timer. Tryck för att starta eller stoppa.", "fr": "Minuteur. Touchez pour démarrer ou arrêter."}, "*. Tap to start or stop.": {"fi": "*. Käynnistä tai pysäytä napauttamalla.", "sv": "*. Tryck för att starta eller stoppa.", "fr": "*. Touchez pour démarrer ou arrêter."}, "Exercises, sets, reps and weights.": {"fi": "Liikkeet, sarjat, toistot ja painot.", "sv": "Övningar, set, repetitioner och vikter.", "fr": "Exercices, séries, répétitions et poids."}, "Past workouts and progress per exercise.": {"fi": "Aiemmat treenit ja liikkeiden kehitys.", "sv": "Tidigare pass och framsteg per övning.", "fr": "Séances passées et progression par exercice."}, "All the exercises you have created. Rename or delete them.": {"fi": "Kaikki luomasi liikkeet. Nimeä uudelleen tai poista.", "sv": "Alla övningar du har skapat. Byt namn eller ta bort dem.", "fr": "Tous les exercices que vous avez créés. Renommez-les ou supprimez-les."}, "Press and hold a widget for its menu.": {"fi": "Paina widgetiä pitkään avataksesi valikon.", "sv": "Tryck och håll på en widget för menyn.", "fr": "Maintenez un widget pour ouvrir son menu."}, "Tap the plus to add a widget.": {"fi": "Lisää widget plussasta.", "sv": "Tryck på plus för att lägga till en widget.", "fr": "Touchez le plus pour ajouter un widget."}, "Add widgets with the plus in the top right corner.": {"fi": "Lisää widgetejä oikean yläkulman plussasta.", "sv": "Lägg till widgetar med plustecknet uppe till höger.", "fr": "Ajoutez des widgets avec le plus en haut à droite."}, "Add widgets from Settings.": {"fi": "Lisää widgetejä asetuksista.", "sv": "Lägg till widgetar från Inställningar.", "fr": "Ajoutez des widgets depuis les Réglages."}, "With the button hidden, add widgets from here.": {"fi": "Kun painike on piilotettu, lisää widgetit täältä.", "sv": "När knappen är dold lägger du till widgetar härifrån.", "fr": "Le bouton étant masqué, ajoutez les widgets d’ici."}, "You can always add widgets from here too.": {"fi": "Voit aina lisätä widgetejä myös täältä.", "sv": "Du kan alltid lägga till widgetar härifrån också.", "fr": "Vous pouvez aussi toujours ajouter des widgets d’ici."}, "Hold and drag a widget to move it. Drag the bar to resize, tap × to remove.": {"fi": "Pidä ja vedä widgetiä siirtääksesi sitä. Vedä palkkia muuttaaksesi kokoa, poista napauttamalla ×.", "sv": "Håll och dra en widget för att flytta den. Dra i fältet för att ändra storlek, tryck på × för att ta bort.", "fr": "Maintenez et glissez un widget pour le déplacer. Glissez la barre pour redimensionner, touchez × pour supprimer."}, "Drag to resize": {"fi": "Vedä muuttaaksesi kokoa", "sv": "Dra för att ändra storlek", "fr": "Glisser pour redimensionner"}, "Previous": {"fi": "Edellinen", "sv": "Förra", "fr": "Précédent"}, "Set": {"fi": "Sarja", "sv": "Set", "fr": "Série"}, "Reps": {"fi": "Toistot", "sv": "Reps", "fr": "Reps"}, "KG": {"fi": "KG", "sv": "KG", "fr": "KG"}, "Reps, set *": {"fi": "Toistot, sarja *", "sv": "Reps, set *", "fr": "Reps, série *"}, "Weight in kilograms, set *": {"fi": "Paino kiloina, sarja *", "sv": "Vikt i kilo, set *", "fr": "Poids en kilos, série *"}, "Remove set *": {"fi": "Poista sarja *", "sv": "Ta bort set *", "fr": "Retirer la série *"}, "Mark set * done": {"fi": "Merkitse sarja * tehdyksi", "sv": "Markera set * som klart", "fr": "Marquer la série * comme faite"}, "Create “*”": {"fi": "Luo “*”", "sv": "Skapa “*”", "fr": "Créer « * »"}, "Remove “*”": {"fi": "Poista “*”", "sv": "Ta bort “*”", "fr": "Retirer « * »"}, "Delete *": {"fi": "Poista *", "sv": "Ta bort *", "fr": "Supprimer *"}, "Best *": {"fi": "Paras *", "sv": "Bäst *", "fr": "Meilleur *"}, "last *": {"fi": "viimeksi *", "sv": "senast *", "fr": "dernière *"}, "Preset: *.": {"fi": "Teema: *.", "sv": "Förinställning: *.", "fr": "Préréglage : *."}, "Loading *…": {"fi": "Ladataan *…", "sv": "Laddar *…", "fr": "Chargement de *…"}, "Google Fonts has no font called “*”": {"fi": "Google Fontsissa ei ole fonttia nimeltä “*”", "sv": "Google Fonts har inget teckensnitt som heter “*”", "fr": "Google Fonts n’a pas de police nommée « * »"}, "* hex code": {"fi": "* heksakoodi", "sv": "* hex-kod", "fr": "Code hex : *"}, "saved here.": {"fi": "tallennettu tänne.", "sv": "sparade här.", "fr": "enregistrés ici."}, "saved": {"fi": "tallennettu", "sv": "sparad", "fr": "enregistrée"}, "Top weight": {"fi": "Suurin paino", "sv": "Högsta vikt", "fr": "Poids max"}, "Most reps": {"fi": "Eniten toistoja", "sv": "Flest reps", "fr": "Max de reps"}, "Top weight per session": {"fi": "Suurin paino per kerta", "sv": "Högsta vikt per pass", "fr": "Poids max par séance"}, "Most reps per session": {"fi": "Eniten toistoja per kerta", "sv": "Flest reps per pass", "fr": "Max de reps par séance"}, "No exercise history yet. Finish a workout with completed sets to start tracking progress.": {"fi": "Ei vielä liikehistoriaa. Lopeta treeni valmiilla sarjoilla, niin kehitystä alkaa kertyä.", "sv": "Ingen övningshistorik än. Avsluta ett pass med klara set för att börja följa framstegen.", "fr": "Pas encore d’historique. Terminez un entraînement avec des séries validées pour suivre vos progrès."}, "No exercises yet. Add your first one above.": {"fi": "Ei vielä liikkeitä. Lisää ensimmäinen yläpuolella.", "sv": "Inga övningar än. Lägg till din första ovan.", "fr": "Aucun exercice pour l’instant. Ajoutez le premier ci-dessus."}, "No exercises yet. Type a name above to create your first one.": {"fi": "Ei vielä liikkeitä. Kirjoita nimi yläpuolelle luodaksesi ensimmäisen.", "sv": "Inga övningar än. Skriv ett namn ovan för att skapa din första.", "fr": "Aucun exercice pour l’instant. Saisissez un nom ci-dessus pour créer le premier."}, "No workouts yet. Finish a workout and it shows up here.": {"fi": "Ei vielä treenejä. Lopeta treeni, niin se ilmestyy tähän.", "sv": "Inga pass än. Avsluta ett pass så visas det här.", "fr": "Aucun entraînement pour l’instant. Terminez-en un et il apparaîtra ici."}, "One session so far. Log this exercise again to see your progress.": {"fi": "Vasta yksi kerta. Kirjaa tämä liike uudelleen nähdäksesi kehityksen.", "sv": "Bara ett pass hittills. Logga övningen igen för att se dina framsteg.", "fr": "Une seule séance pour l’instant. Refaites cet exercice pour voir vos progrès."}, "Show more": {"fi": "Näytä lisää", "sv": "Visa mer", "fr": "Afficher plus"}, "Mon 26 Oct": {"fi": "ma 26. lokak.", "sv": "mån 26 okt.", "fr": "lun. 26 oct."}, "Fri 23 Oct": {"fi": "pe 23. lokak.", "sv": "fre 23 okt.", "fr": "ven. 23 oct."}, "Workout saved": {"fi": "Treeni tallennettu", "sv": "Passet sparades", "fr": "Entraînement enregistré"}, "Workout closed, no completed sets": {"fi": "Treeni suljettu, ei valmiita sarjoja", "sv": "Passet stängdes, inga klara set", "fr": "Entraînement fermé, aucune série validée"}, "That exercise already exists": {"fi": "Tämä liike on jo olemassa", "sv": "Den övningen finns redan", "fr": "Cet exercice existe déjà"}, "An exercise with that name already exists": {"fi": "Samanniminen liike on jo olemassa", "sv": "En övning med det namnet finns redan", "fr": "Un exercice de ce nom existe déjà"}, "Name can’t be empty": {"fi": "Nimi ei voi olla tyhjä", "sv": "Namnet får inte vara tomt", "fr": "Le nom ne peut pas être vide"}, "General": {"fi": "Yleiset", "sv": "Allmänt", "fr": "Général"}, "Title": {"fi": "Otsikko", "sv": "Rubrik", "fr": "Titre"}, "No title": {"fi": "Ei otsikkoa", "sv": "Ingen rubrik", "fr": "Sans titre"}, "Widget title": {"fi": "Widgetin otsikko", "sv": "Widgetrubrik", "fr": "Titre du widget"}, "Look": {"fi": "Ulkoasu", "sv": "Utseende", "fr": "Apparence"}, "Size": {"fi": "Koko", "sv": "Storlek", "fr": "Taille"}, "tiles": {"fi": "ruutua", "sv": "rutor", "fr": "cases"}, "Use global look": {"fi": "Käytä yleistä ulkoasua", "sv": "Använd globalt utseende", "fr": "Utiliser l’apparence globale"}, "These settings only change this widget.": {"fi": "Nämä asetukset muuttavat vain tätä widgetiä.", "sv": "Dessa inställningar ändrar bara den här widgeten.", "fr": "Ces réglages ne modifient que ce widget."}, "The largest size is set under Settings, Widgets.": {"fi": "Suurin koko asetetaan kohdassa Asetukset, Widgetit.", "sv": "Största storleken ställs in under Inställningar, Widgetar.", "fr": "La taille maximale se règle dans Réglages, Widgets."}, "Largest size a widget can be": {"fi": "Widgetin suurin koko", "sv": "Största storlek för en widget", "fr": "Taille maximale d’un widget"}, "One tile is one widget height. Change a single widget’s size by holding it and choosing Change widget size.": {"fi": "Yksi ruutu on yhden widgetin korkeus. Muuta yksittäisen widgetin kokoa pitämällä sitä pohjassa ja valitsemalla Muuta widgetin kokoa.", "sv": "En ruta är en widgethöjd. Ändra storleken på en enskild widget genom att hålla in den och välja Ändra widgetstorlek.", "fr": "Une case correspond à la hauteur d’un widget. Pour changer la taille d’un seul widget, maintenez-le et choisissez Changer la taille du widget."}, "Borders, size and spacing of every widget.": {"fi": "Jokaisen widgetin reunat, koko ja välit.", "sv": "Kanter, storlek och avstånd för varje widget.", "fr": "Bordures, taille et espacement de chaque widget."}, "Borders": {"fi": "Reunat", "sv": "Kanter", "fr": "Bordures"}, "Border color": {"fi": "Reunan väri", "sv": "Kantfärg", "fr": "Couleur de bordure"}, "Border thickness": {"fi": "Reunan paksuus", "sv": "Kanttjocklek", "fr": "Épaisseur de bordure"}, "Corner radius": {"fi": "Kulmien pyöristys", "sv": "Hörnradie", "fr": "Rayon des coins"}, "Divider thickness": {"fi": "Jakoviivan paksuus", "sv": "Avdelarens tjocklek", "fr": "Épaisseur des séparateurs"}, "Space between widgets": {"fi": "Widgetien väli", "sv": "Avstånd mellan widgetar", "fr": "Espace entre les widgets"}, "Widget height": {"fi": "Widgetin korkeus", "sv": "Widgethöjd", "fr": "Hauteur du widget"}, "Widget opacity": {"fi": "Widgetin läpinäkyvyys", "sv": "Widgetens opacitet", "fr": "Opacité du widget"}, "Widget color": {"fi": "Widgetin väri", "sv": "Widgetfärg", "fr": "Couleur du widget"}, "Widget background": {"fi": "Widgetin tausta", "sv": "Widgetbakgrund", "fr": "Fond du widget"}, "Timer text size": {"fi": "Ajastimen tekstin koko", "sv": "Timerns textstorlek", "fr": "Taille du texte du minuteur"}, "Accent": {"fi": "Korostus", "sv": "Accent", "fr": "Accent"}, "Text": {"fi": "Teksti", "sv": "Text", "fr": "Texte"}, "Secondary text": {"fi": "Toissijainen teksti", "sv": "Sekundär text", "fr": "Texte secondaire"}, "Background color": {"fi": "Taustaväri", "sv": "Bakgrundsfärg", "fr": "Couleur de fond"}, "Start color": {"fi": "Alkuväri", "sv": "Startfärg", "fr": "Couleur de début"}, "End color": {"fi": "Loppuväri", "sv": "Slutfärg", "fr": "Couleur de fin"}, "Angle": {"fi": "Kulma", "sv": "Vinkel", "fr": "Angle"}, "Color": {"fi": "Väri", "sv": "Färg", "fr": "Couleur"}, "Gradient": {"fi": "Liukuväri", "sv": "Övertoning", "fr": "Dégradé"}, "Image": {"fi": "Kuva", "sv": "Bild", "fr": "Image"}, "Darken image": {"fi": "Tummenna kuvaa", "sv": "Mörkare bild", "fr": "Assombrir l’image"}, "Choose an image": {"fi": "Valitse kuva", "sv": "Välj en bild", "fr": "Choisir une image"}, "Choose another image": {"fi": "Valitse toinen kuva", "sv": "Välj en annan bild", "fr": "Choisir une autre image"}, "Remove image": {"fi": "Poista kuva", "sv": "Ta bort bild", "fr": "Retirer l’image"}, "Behind all widgets.": {"fi": "Kaikkien widgetien takana.", "sv": "Bakom alla widgetar.", "fr": "Derrière tous les widgets."}, "The image is shrunk and kept on this device only.": {"fi": "Kuva pienennetään ja säilytetään vain tällä laitteella.", "sv": "Bilden förminskas och sparas bara på den här enheten.", "fr": "L’image est réduite et conservée uniquement sur cet appareil."}, "Auto": {"fi": "Auto", "sv": "Auto", "fr": "Auto"}, "Light": {"fi": "Vaalea", "sv": "Ljust", "fr": "Clair"}, "Dark": {"fi": "Tumma", "sv": "Mörkt", "fr": "Sombre"}, "Slate": {"fi": "Liuskekivi", "sv": "Skiffer", "fr": "Ardoise"}, "Black": {"fi": "Musta", "sv": "Svart", "fr": "Noir"}, "Gray": {"fi": "Harmaa", "sv": "Grå", "fr": "Gris"}, "Auto follows your phone’s light or dark mode.": {"fi": "Auto seuraa puhelimesi vaaleaa tai tummaa tilaa.", "sv": "Auto följer telefonens ljusa eller mörka läge.", "fr": "Auto suit le mode clair ou sombre de votre téléphone."}, "Pick a preset, then change any single color.": {"fi": "Valitse teema ja muuta sitten yksittäisiä värejä.", "sv": "Välj en förinställning och ändra sedan enskilda färger.", "fr": "Choisissez un préréglage, puis modifiez chaque couleur."}, "Custom colors are applied on top.": {"fi": "Omat värit lisätään päälle.", "sv": "Egna färger läggs ovanpå.", "fr": "Les couleurs personnalisées s’appliquent par-dessus."}, "Reset custom colors": {"fi": "Nollaa omat värit", "sv": "Återställ egna färger", "fr": "Réinitialiser les couleurs"}, "Icon thickness": {"fi": "Kuvakkeen paksuus", "sv": "Ikontjocklek", "fr": "Épaisseur des icônes"}, "Line ends": {"fi": "Viivan päät", "sv": "Linjeändar", "fr": "Extrémités des traits"}, "Round line ends": {"fi": "Pyöreät viivan päät", "sv": "Runda linjeändar", "fr": "Extrémités arrondies"}, "Square line ends": {"fi": "Suorat viivan päät", "sv": "Fyrkantiga linjeändar", "fr": "Extrémités carrées"}, "Round": {"fi": "Pyöreä", "sv": "Rund", "fr": "Arrondi"}, "Square": {"fi": "Neliö", "sv": "Fyrkant", "fr": "Carré"}, "Style for every icon in the app.": {"fi": "Jokaisen sovelluksen kuvakkeen tyyli.", "sv": "Stil för varje ikon i appen.", "fr": "Style de chaque icône de l’application."}, "Text label": {"fi": "Tekstikuvake", "sv": "Textetikett", "fr": "Texte"}, "The plus in the add widget box follows the border thickness under Widgets.": {"fi": "Lisää widget -ruudun plus seuraa reunan paksuutta kohdassa Widgetit.", "sv": "Plustecknet i rutan för att lägga till widget följer kanttjockleken under Widgetar.", "fr": "Le plus du bloc d’ajout suit l’épaisseur de bordure définie dans Widgets."}, "Used everywhere in the app, including the timer.": {"fi": "Käytössä kaikkialla sovelluksessa, myös ajastimessa.", "sv": "Används överallt i appen, även i timern.", "fr": "Utilisé partout dans l’application, y compris le minuteur."}, "Add your own font": {"fi": "Lisää oma fontti", "sv": "Lägg till eget teckensnitt", "fr": "Ajouter votre propre police"}, "Add from Google Fonts": {"fi": "Lisää Google Fontsista", "sv": "Lägg till från Google Fonts", "fr": "Ajouter depuis Google Fonts"}, "Google Fonts name": {"fi": "Google Fonts -nimi", "sv": "Google Fonts-namn", "fr": "Nom Google Fonts"}, "Google Fonts name, e.g. Space Mono": {"fi": "Google Fonts -nimi, esim. Space Mono", "sv": "Google Fonts-namn, t.ex. Space Mono", "fr": "Nom Google Fonts, p. ex. Space Mono"}, "Upload a font file": {"fi": "Lataa fonttitiedosto", "sv": "Ladda upp en typsnittsfil", "fr": "Importer un fichier de police"}, "Use the exact Google Fonts name": {"fi": "Käytä tarkkaa Google Fonts -nimeä", "sv": "Använd det exakta Google Fonts-namnet", "fr": "Utilisez le nom exact de Google Fonts"}, "Font files (.ttf, .otf, .woff, .woff2, up to 1.5 MB) are stored on this device only. Fonts with a single weight get a synthesized bold.": {"fi": "Fonttitiedostot (.ttf, .otf, .woff, .woff2, enintään 1,5 Mt) tallennetaan vain tälle laitteelle. Yhden paksuuden fonteille luodaan tekobold.", "sv": "Typsnittsfiler (.ttf, .otf, .woff, .woff2, upp till 1,5 MB) sparas bara på den här enheten. Typsnitt med en enda vikt får syntetisk fetstil.", "fr": "Les fichiers de police (.ttf, .otf, .woff, .woff2, jusqu’à 1,5 Mo) sont stockés uniquement sur cet appareil. Les polices à graisse unique reçoivent un gras synthétique."}, "That font file is over 1.5 MB": {"fi": "Fonttitiedosto on yli 1,5 Mt", "sv": "Typsnittsfilen är över 1,5 MB", "fr": "Ce fichier de police dépasse 1,5 Mo"}, "That file is not a usable font": {"fi": "Tämä tiedosto ei ole käyttökelpoinen fontti", "sv": "Den filen är inget användbart typsnitt", "fr": "Ce fichier n’est pas une police utilisable"}, "Not enough storage for that font": {"fi": "Tilaa ei riitä tälle fontille", "sv": "Inte tillräckligt med lagringsutrymme för typsnittet", "fr": "Pas assez d’espace pour cette police"}, "Not enough storage for that image": {"fi": "Tilaa ei riitä tälle kuvalle", "sv": "Inte tillräckligt med lagringsutrymme för bilden", "fr": "Pas assez d’espace pour cette image"}, "Could not open that image": {"fi": "Kuvaa ei voitu avata", "sv": "Kunde inte öppna bilden", "fr": "Impossible d’ouvrir cette image"}, "Could not read that file": {"fi": "Tiedostoa ei voitu lukea", "sv": "Kunde inte läsa filen", "fr": "Impossible de lire ce fichier"}, "How menus, sheets and widgets move.": {"fi": "Miten valikot, paneelit ja widgetit liikkuvat.", "sv": "Hur menyer, paneler och widgetar rör sig.", "fr": "Comment les menus, panneaux et widgets bougent."}, "Smooth": {"fi": "Pehmeä", "sv": "Mjuk", "fr": "Fluide"}, "Snappy": {"fi": "Napakka", "sv": "Snabb", "fr": "Vif"}, "Bouncy": {"fi": "Pomppiva", "sv": "Studsig", "fr": "Rebondissant"}, "Calm and soft": {"fi": "Rauhallinen ja pehmeä", "sv": "Lugn och mjuk", "fr": "Calme et doux"}, "Quick and crisp": {"fi": "Nopea ja terävä", "sv": "Snabb och skarp", "fr": "Rapide et net"}, "Springy overshoot": {"fi": "Joustava ylitys", "sv": "Fjädrande överskjut", "fr": "Dépassement élastique"}, "No motion at all": {"fi": "Ei liikettä lainkaan", "sv": "Ingen rörelse alls", "fr": "Aucun mouvement"}, "None": {"fi": "Ei mitään", "sv": "Ingen", "fr": "Aucune"}, "Where to add new widgets from.": {"fi": "Mistä uusia widgetejä lisätään.", "sv": "Var nya widgetar läggs till.", "fr": "D’où ajouter de nouveaux widgets."}, "Big box": {"fi": "Iso ruutu", "sv": "Stor ruta", "fr": "Grand bloc"}, "Corner": {"fi": "Kulma", "sv": "Hörn", "fr": "Coin"}, "Hidden": {"fi": "Piilotettu", "sv": "Dold", "fr": "Masqué"}, "Your workouts and settings are stored on this device only. Save a copy now and then, or use it to move to another device.": {"fi": "Treenisi ja asetuksesi tallennetaan vain tälle laitteelle. Tallenna kopio silloin tällöin tai siirrä tiedot sillä toiselle laitteelle.", "sv": "Dina pass och inställningar sparas bara på den här enheten. Spara en kopia då och då eller använd den för att flytta till en annan enhet.", "fr": "Vos entraînements et réglages sont stockés uniquement sur cet appareil. Faites une copie de temps en temps, ou utilisez-la pour changer d’appareil."}, "Save backup file": {"fi": "Tallenna varmuuskopiotiedosto", "sv": "Spara säkerhetskopia", "fr": "Enregistrer le fichier de sauvegarde"}, "Copy backup as text": {"fi": "Kopioi varmuuskopio tekstinä", "sv": "Kopiera säkerhetskopia som text", "fr": "Copier la sauvegarde en texte"}, "Restore from a file": {"fi": "Palauta tiedostosta", "sv": "Återställ från fil", "fr": "Restaurer depuis un fichier"}, "Restore from pasted text": {"fi": "Palauta liitetystä tekstistä", "sv": "Återställ från inklistrad text", "fr": "Restaurer depuis le texte collé"}, "Or paste backup text here": {"fi": "Tai liitä varmuuskopioteksti tähän", "sv": "Eller klistra in säkerhetskopians text här", "fr": "Ou collez le texte de sauvegarde ici"}, "Backup text": {"fi": "Varmuuskopioteksti", "sv": "Säkerhetskopians text", "fr": "Texte de sauvegarde"}, "Backup ready to restore": {"fi": "Varmuuskopio valmis palautettavaksi", "sv": "Säkerhetskopian är redo att återställas", "fr": "Sauvegarde prête à être restaurée"}, "Replace my data with this backup": {"fi": "Korvaa tietoni tällä varmuuskopiolla", "sv": "Ersätt mina data med den här säkerhetskopian", "fr": "Remplacer mes données par cette sauvegarde"}, "Backup file created": {"fi": "Varmuuskopiotiedosto luotu", "sv": "Säkerhetskopia skapad", "fr": "Fichier de sauvegarde créé"}, "Backup copied": {"fi": "Varmuuskopio kopioitu", "sv": "Säkerhetskopian kopierades", "fr": "Sauvegarde copiée"}, "Copy blocked. The text is in the box below, select and copy it.": {"fi": "Kopiointi estetty. Teksti on alla olevassa ruudussa, valitse ja kopioi se.", "sv": "Kopieringen blockerades. Texten finns i rutan nedan, markera och kopiera den.", "fr": "Copie bloquée. Le texte est dans la zone ci-dessous, sélectionnez-le et copiez-le."}, "Restoring replaces everything on this device. If saving a file does not work in your browser, copy the text and keep it in a note.": {"fi": "Palautus korvaa kaiken tällä laitteella. Jos tiedoston tallennus ei toimi selaimessasi, kopioi teksti ja säilytä se muistiinpanossa.", "sv": "Återställning ersätter allt på den här enheten. Om det inte går att spara en fil i din webbläsare, kopiera texten och spara den i en anteckning.", "fr": "La restauration remplace tout sur cet appareil. Si l’enregistrement d’un fichier ne fonctionne pas dans votre navigateur, copiez le texte et gardez-le dans une note."}, "That is not a customized-trainer backup": {"fi": "Tämä ei ole customized-trainer -varmuuskopio", "sv": "Det där är ingen customized-trainer-säkerhetskopia", "fr": "Ce n’est pas une sauvegarde customized-trainer"}, "That file is too large to be a backup": {"fi": "Tiedosto on liian suuri varmuuskopioksi", "sv": "Filen är för stor för att vara en säkerhetskopia", "fr": "Ce fichier est trop volumineux pour être une sauvegarde"}, "Not enough storage to restore this backup": {"fi": "Tilaa ei riitä varmuuskopion palauttamiseen", "sv": "Inte tillräckligt med lagringsutrymme för att återställa säkerhetskopian", "fr": "Pas assez d’espace pour restaurer cette sauvegarde"}, "Reset appearance": {"fi": "Nollaa ulkoasu", "sv": "Återställ utseende", "fr": "Réinitialiser l’apparence"}, "Appearance reset": {"fi": "Ulkoasu nollattu", "sv": "Utseendet återställdes", "fr": "Apparence réinitialisée"}, "Workouts and history are not touched.": {"fi": "Treenejä ja historiaa ei muuteta.", "sv": "Pass och historik påverkas inte.", "fr": "Les entraînements et l’historique ne sont pas modifiés."}, "Appearance": {"fi": "Ulkoasu", "sv": "Utseende", "fr": "Apparence"}, "Motion": {"fi": "Liike", "sv": "Rörelse", "fr": "Mouvement"}, "Data": {"fi": "Tiedot", "sv": "Data", "fr": "Données"}, "Categories": {"fi": "Luokat", "sv": "Kategorier", "fr": "Catégories"}};
+  var NOUNS = {
+    exercise: { fi: ['liike', 'liikettä'], sv: ['övning', 'övningar'], fr: ['exercice', 'exercices'] },
+    set: { fi: ['sarja', 'sarjaa'], sv: ['set', 'set'], fr: ['série', 'séries'] },
+    session: { fi: ['kerta', 'kertaa'], sv: ['pass', 'pass'], fr: ['séance', 'séances'] },
+    workout: { fi: ['treeni', 'treeniä'], sv: ['träningspass', 'träningspass'], fr: ['entraînement', 'entraînements'] },
+    rep: { fi: ['toisto', 'toistoa'], sv: ['repetition', 'repetitioner'], fr: ['répétition', 'répétitions'] },
+    tile: { fi: ['ruutu', 'ruutua'], sv: ['ruta', 'rutor'], fr: ['case', 'cases'] }
+  };
+  function noun(key, n) { var w = NOUNS[key][lang]; return n + ' ' + (n === 1 ? w[0] : w[1]); }
+  var TPLS = [];
+  Object.keys(DICT).forEach(function (k) {
+    if (k.indexOf('*') < 0) return;
+    var re = '^' + k.split('*').map(function (x) { return x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('(.+?)') + '$';
+    TPLS.push([new RegExp(re), k]);
+  });
+  function trCore(en) {
+    var d = DICT[en];
+    if (d) return d[lang] || en;
+    if (en.indexOf(' · ') > 0) return en.split(' · ').map(trCore).join(' · ');
+    var m = /^(\d+) (exercise|set|session|workout|rep|tile)s?$/.exec(en);
+    if (m) return noun(m[2], +m[1]);
+    m = /^(\d+) workouts?, (\d+) exercises?( saved here)?(, saved (.+))?\.$/.exec(en);
+    if (m) {
+      var t = noun('workout', +m[1]) + ', ' + noun('exercise', +m[2]);
+      if (m[3]) return t + ' ' + DICT['saved here.'][lang];
+      if (m[4]) return t + ', ' + DICT['saved'][lang] + ' ' + m[5] + '.';
+      return t + '.';
+    }
+    for (var i = 0; i < TPLS.length; i++) {
+      m = TPLS[i][0].exec(en);
+      if (m) {
+        var parts = m.slice(1).map(trCore), j = 0;
+        return DICT[TPLS[i][1]][lang].replace(/\*/g, function () { return parts[j++]; });
+      }
+    }
+    return en;
+  }
+  function tr(str) {
+    if (lang === 'en' || !str) return str;
+    var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(str);
+    if (!m[2]) return str;
+    return m[1] + trCore(m[2]) + m[3];
+  }
+  var TATTRS = ['placeholder', 'aria-label', 'title'];
+  var textRec = new WeakMap(), attrRec = new WeakMap();
+  function trText(n) {
+    var cur = n.data, rec = textRec.get(n), en = rec && cur === rec.out ? rec.en : cur;
+    var out = tr(en);
+    if (out !== cur) n.data = out;
+    if (out !== en || rec) textRec.set(n, { en: en, out: out });
+  }
+  function trAttrs(el) {
+    var recs = attrRec.get(el) || {}, any = false;
+    TATTRS.forEach(function (a) {
+      if (!el.hasAttribute(a)) return;
+      var cur = el.getAttribute(a), rec = recs[a], en = rec && cur === rec.out ? rec.en : cur;
+      var out = tr(en);
+      if (out !== cur) el.setAttribute(a, out);
+      if (out !== en || rec) { recs[a] = { en: en, out: out }; any = true; }
+    });
+    if (any) attrRec.set(el, recs);
+  }
+  function trWalk(root) {
+    if (!root) return;
+    if (root.nodeType === 3) { if (!root.parentNode || !/^(SCRIPT|STYLE|TEXTAREA)$/.test(root.parentNode.nodeName)) trText(root); return; }
+    if (root.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(root.nodeName) || root.getAttribute('translate') === 'no') return;
+    trAttrs(root);
+    for (var c = root.firstChild; c; c = c.nextSibling) trWalk(c);
+  }
+  var i18nObs = null, OBS_OPTS = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: TATTRS };
+  function startI18n() {
+    if (typeof MutationObserver === 'undefined') return;
+    i18nObs = new MutationObserver(function (recs) {
+      i18nObs.disconnect();
+      recs.forEach(function (r) {
+        if (r.type === 'childList') r.addedNodes.forEach(trWalk);
+        else if (r.type === 'characterData') trWalk(r.target);
+        else if (r.type === 'attributes') trAttrs(r.target);
+      });
+      i18nObs.observe(document.body, OBS_OPTS);
+    });
+    trWalk(document.body);
+    i18nObs.observe(document.body, OBS_OPTS);
+  }
+  function setLang(l) {
+    lang = l;
+    document.documentElement.lang = l;
+    if (i18nObs) i18nObs.disconnect();
+    trWalk(document.body);
+    if (i18nObs) i18nObs.observe(document.body, OBS_OPTS);
+  }
+
+  applyLook();
+  initFonts();
+  lang = S().lang;
+  document.documentElement.lang = lang;
+  render();
+  startI18n();
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
